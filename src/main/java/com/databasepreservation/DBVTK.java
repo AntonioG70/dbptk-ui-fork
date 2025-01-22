@@ -8,14 +8,14 @@
 package com.databasepreservation;
 
 import java.io.IOException;
+import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import javax.servlet.http.HttpServlet;
 import javax.sql.DataSource;
 
-import org.jasig.cas.client.session.SingleSignOutHttpSessionListener;
+import org.apereo.cas.client.session.SingleSignOutHttpSessionListener;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.jdbc.DataSourceBuilder;
@@ -28,6 +28,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.web.filter.RequestContextFilter;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -35,6 +36,8 @@ import com.databasepreservation.common.client.ViewerConstants;
 import com.databasepreservation.common.filter.OnOffFilter;
 import com.databasepreservation.common.server.BrowserServiceImpl;
 import com.databasepreservation.common.server.ViewerConfiguration;
+
+import jakarta.servlet.http.HttpServlet;
 
 @SpringBootApplication
 public class DBVTK {
@@ -45,13 +48,13 @@ public class DBVTK {
 
   @Bean
   public ServletRegistrationBean<HttpServlet> browserService() {
-    ServletRegistrationBean<HttpServlet> bean;
+    ServletRegistrationBean<HttpServlet> bean = new ServletRegistrationBean<>();
+    bean.setServlet(new BrowserServiceImpl());
     if (ViewerConstants.APPLICATION_ENV_DESKTOP
       .equals(System.getProperty(ViewerConstants.APPLICATION_ENV_KEY, ViewerConstants.APPLICATION_ENV_SERVER))) {
-      bean = new ServletRegistrationBean<>(new BrowserServiceImpl(),
-        "/com.databasepreservation.desktop.Desktop/browse");
+      bean.addUrlMappings("/com.databasepreservation.desktop.Desktop/browse");
     } else {
-      bean = new ServletRegistrationBean<>(new BrowserServiceImpl(), "/com.databasepreservation.server.Server/browse");
+      bean.addUrlMappings("/com.databasepreservation.server.Server/browse");
     }
     bean.setLoadOnStartup(2);
     return bean;
@@ -129,7 +132,7 @@ public class DBVTK {
     FilterRegistrationBean<OnOffFilter> registrationBean = new FilterRegistrationBean<>();
     registrationBean.setFilter(new OnOffFilter());
     registrationBean.setName("CasSingleSignOutFilter");
-    registrationBean.addInitParameter("inner-filter-class", "org.jasig.cas.client.session.SingleSignOutFilter");
+    registrationBean.addInitParameter("inner-filter-class", "org.apereo.cas.client.session.SingleSignOutFilter");
     registrationBean.addInitParameter("config-prefix", "ui.filter.cas");
     registrationBean.addInitParameter("casServerUrlPrefix", "http://localhost:8888/cas");
     registrationBean.addUrlPatterns("/*");
@@ -148,7 +151,7 @@ public class DBVTK {
     registrationBean.setFilter(new OnOffFilter());
     registrationBean.setName("CasValidationFilter");
     registrationBean.addInitParameter("inner-filter-class",
-      "org.jasig.cas.client.validation.Cas30ProxyReceivingTicketValidationFilter");
+      "org.apereo.cas.client.validation.Cas30ProxyReceivingTicketValidationFilter");
     registrationBean.addInitParameter("config-prefix", "ui.filter.cas");
     registrationBean.addInitParameter("casServerUrlPrefix", "https://localhost:8443/cas");
     registrationBean.addInitParameter("serverName", "https://localhost:8888");
@@ -167,7 +170,7 @@ public class DBVTK {
     FilterRegistrationBean<OnOffFilter> registrationBean = new FilterRegistrationBean<>();
     registrationBean.setFilter(new OnOffFilter());
     registrationBean.setName("CasAuthenticationFilter");
-    registrationBean.addInitParameter("inner-filter-class", "org.jasig.cas.client.authentication.AuthenticationFilter");
+    registrationBean.addInitParameter("inner-filter-class", "org.apereo.cas.client.authentication.AuthenticationFilter");
     registrationBean.addInitParameter("config-prefix", "ui.filter.cas");
     registrationBean.addInitParameter("casServerLoginUrl", "https://localhost:8443/cas/login");
     registrationBean.addUrlPatterns("/login");
@@ -181,7 +184,7 @@ public class DBVTK {
     registrationBean.setFilter(new OnOffFilter());
     registrationBean.setName("CasRequestWrapperFilter");
     registrationBean.addInitParameter("inner-filter-class",
-      "org.jasig.cas.client.util.HttpServletRequestWrapperFilter");
+      "org.apereo.cas.client.util.HttpServletRequestWrapperFilter");
     registrationBean.addInitParameter("config-prefix", "ui.filter.cas");
     registrationBean.addUrlPatterns("/*");
 
@@ -220,7 +223,7 @@ public class DBVTK {
    * H2 Datasource
    *********************/
   @Bean
-  public DataSource getDataSource() {
+  public DataSource dataSource() {
     DataSourceBuilder dataSourceBuilder = DataSourceBuilder.create();
     dataSourceBuilder.driverClassName("org.h2.Driver");
     dataSourceBuilder
@@ -242,7 +245,24 @@ public class DBVTK {
       }
       registry.setOrder(Ordered.HIGHEST_PRECEDENCE);
     }
+
+    @Override
+    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+      registry.addResourceHandler("/com.databasepreservation.server.Server/**")
+        .addResourceLocations("classpath:/com.databasepreservation.server.Server/");
+
+      if (ViewerConstants.APPLICATION_ENV_DESKTOP
+        .equals(System.getProperty(ViewerConstants.APPLICATION_ENV_KEY, ViewerConstants.APPLICATION_ENV_SERVER))) {
+        registry.addResourceHandler("/com.databasepreservation.desktop.Desktop/**")
+          .addResourceLocations("classpath:/com.databasepreservation.desktop.Desktop/");
+      } else {
+        registry.addResourceHandler("/com.databasepreservation.server.Server/**")
+          .addResourceLocations("classpath:/com.databasepreservation.server.Server/");
+      }
+    }
   }
+
+
 
   // @Bean
   // MultipartConfigElement multipartConfigElement() {

@@ -17,7 +17,6 @@ import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.servlet.ServletProperties;
 import org.springframework.context.annotation.Configuration;
 
-import com.databasepreservation.common.api.exceptions.RestExceptionMapper;
 import com.databasepreservation.common.api.utils.CacheFilterFactory;
 import com.databasepreservation.common.api.v1.ActivityLogResource;
 import com.databasepreservation.common.api.v1.AuthenticationResource;
@@ -67,7 +66,6 @@ public class RestApplicationNoSwagger extends ResourceConfig {
     register(JacksonFeature.class);
     register(MoxyXmlFeature.class);
     register(MultiPartFeature.class);
-    register(RestExceptionMapper.class);
     register(CacheFilterFactory.class);
 
     register(ActivityLogResource.class);
@@ -81,6 +79,7 @@ public class RestApplicationNoSwagger extends ResourceConfig {
     register(MigrationResource.class);
     register(SiardResource.class);
     register(ThemeResource.class);
+    register(FileResource.class);
     register(SwaggerSerializers.class);
     register(CORSFilter.class);
     // packages("com.databasepreservation.visualization.api","com.databasepreservation.common.client.services");

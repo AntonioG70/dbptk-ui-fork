@@ -26,6 +26,7 @@
     <extend-property name="locale" values="pt_PT" />
     <extend-property name="locale" values="cs" />
     <extend-property name="locale" values="de" />
+    <extend-property name="locale" values="da" />
     <extend-property name="locale" values="et" />
     <set-property-fallback name="locale" value="en"/>
 
@@ -34,7 +35,8 @@
     <stylesheet src="print.css" />
 
     <source path="client"/>
-
+    <source path="api" />
+    <source path="exceptions"/>
     <!-- https://github.com/resty-gwt/resty-gwt/issues/296 -->
     <!-- in order to use auto-detection on strings you need to set in your XZY-gwt.xml -->
     <set-property name="restygwt.autodetect.plainText" value="true" />

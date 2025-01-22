@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.databasepreservation.common.api.v1.utils.StringResponse;
 import com.databasepreservation.common.client.ObserverManager;
 import com.databasepreservation.common.client.ViewerConstants;
 import com.databasepreservation.common.client.common.DefaultAsyncCallback;
@@ -67,16 +68,22 @@ public class BrowseNavigationPanel {
   }
 
   private void handleBrowseAction() {
-    if (database.getStatus().equals(ViewerDatabaseStatus.METADATA_ONLY)) { // Initial state
-      if (database.getVersion().equals(ViewerConstants.SIARD_V21)) {
+    if (database.getStatus().equals(ViewerDatabaseStatus.METADATA_ONLY)) {
+      // Initial state
+      if (database.getVersion().equals(ViewerConstants.SIARD_V21)
+        || database.getVersion().equals(ViewerConstants.SIARD_DK_1007)
+        || database.getVersion().equals(ViewerConstants.SIARD_DK_128)) {
         if (!btnIngestClicked) {
           btnIngestClicked = true;
 
           HistoryManager.gotoIngestSIARDData(database.getUuid(), database.getMetadata().getName());
-          CollectionService.Util.call((String databaseUUID) -> {
-            /*HistoryManager.gotoDatabase(databaseUUID);
-            Dialogs.showInformationDialog(messages.SIARDHomePageDialogTitleForBrowsing(),
-              messages.SIARDHomePageTextForIngestSuccess(), messages.basicActionClose(), "btn btn-link");*/
+          CollectionService.Util.call((StringResponse databaseUUID) -> {
+            /*
+             * HistoryManager.gotoDatabase(databaseUUID);
+             * Dialogs.showInformationDialog(messages.SIARDHomePageDialogTitleForBrowsing(),
+             * messages.SIARDHomePageTextForIngestSuccess(), messages.basicActionClose(),
+             * "btn btn-link");
+             */
           }, (String errorMessage) -> {
             instances.clear();
             HistoryManager.gotoSIARDInfo(database.getUuid());

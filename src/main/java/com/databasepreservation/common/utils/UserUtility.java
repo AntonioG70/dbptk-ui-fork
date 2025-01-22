@@ -11,33 +11,24 @@ import java.io.Serializable;
 import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.time.DateTimeException;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpSession;
-import javax.ws.rs.BadRequestException;
-import javax.ws.rs.NotAuthorizedException;
-import javax.ws.rs.ProcessingException;
-import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.ClientBuilder;
-import javax.ws.rs.client.Invocation;
-import javax.ws.rs.client.WebTarget;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriBuilder;
-
 import org.apache.commons.httpclient.HttpMethod;
 import org.apache.commons.lang3.StringUtils;
+import org.apereo.cas.client.util.AbstractCasFilter;
+import org.apereo.cas.client.validation.Assertion;
 import org.glassfish.jersey.client.authentication.HttpAuthenticationFeature;
-import org.jasig.cas.client.util.AbstractCasFilter;
-import org.jasig.cas.client.validation.Assertion;
 import org.roda.core.data.exceptions.AuthorizationDeniedException;
 import org.roda.core.data.exceptions.GenericException;
 import org.roda.core.data.exceptions.NotFoundException;
@@ -48,18 +39,33 @@ import org.slf4j.LoggerFactory;
 
 import com.databasepreservation.common.client.ViewerConstants;
 import com.databasepreservation.common.client.common.search.SavedSearch;
-import com.databasepreservation.common.client.exceptions.AuthorizationException;
 import com.databasepreservation.common.client.index.IsIndexed;
 import com.databasepreservation.common.client.index.filter.Filter;
 import com.databasepreservation.common.client.index.filter.SimpleFilterParameter;
+import com.databasepreservation.common.client.models.authorization.AuthorizationDetails;
 import com.databasepreservation.common.client.models.authorization.AuthorizationGroup;
 import com.databasepreservation.common.client.models.authorization.AuthorizationGroupsList;
 import com.databasepreservation.common.client.models.status.database.DatabaseStatus;
 import com.databasepreservation.common.client.models.structure.ViewerDatabase;
 import com.databasepreservation.common.client.models.user.User;
+import com.databasepreservation.common.exceptions.AuthorizationException;
 import com.databasepreservation.common.server.ViewerConfiguration;
 import com.databasepreservation.common.server.ViewerFactory;
 import com.google.common.collect.Sets;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
+import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.NotAuthorizedException;
+import jakarta.ws.rs.ProcessingException;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.client.Client;
+import jakarta.ws.rs.client.ClientBuilder;
+import jakarta.ws.rs.client.Invocation;
+import jakarta.ws.rs.client.WebTarget;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriBuilder;
 
 public class UserUtility {
   private static final Logger LOGGER = LoggerFactory.getLogger(UserUtility.class);
@@ -119,22 +125,21 @@ public class UserUtility {
   public static void checkDatabasePermission(final User user, String databaseUUID) throws AuthorizationException {
     LOGGER.debug("Checking if user {} has permissions to access database {}", user.getId(), databaseUUID);
     try {
-      // Admin always have access to all databases
-      if (!userIsAdmin(user)) {
+      // Admin and whitelist always have access to all databases
+      if (!userIsAdmin(user) && !user.isWhiteList()) {
         DatabaseStatus databaseStatus = ViewerFactory.getConfigurationManager().getDatabaseStatus(databaseUUID);
 
-        Set<String> permissions = databaseStatus.getPermissions();
+        Map<String, AuthorizationDetails> permissions = databaseStatus.getPermissions();
 
         checkAuthorizationGroups(user, permissions);
       }
     } catch (GenericException e) {
       throw new AuthorizationException(
-        "Unable to load the configuration file needed to access database. Deny the access for that reason",
-        com.google.gwt.http.client.Response.SC_UNAUTHORIZED);
+        "Unable to load the configuration file needed to access database. Deny the access for that reason");
     }
   }
 
-  private static void checkAuthorizationGroups(final User user, Set<String> databasePermissions)
+  private static void checkAuthorizationGroups(final User user, Map<String, AuthorizationDetails> databasePermissions)
     throws AuthorizationException {
     AuthorizationGroupsList allAuthorizationGroups = ViewerConfiguration.getInstance()
       .getCollectionsAuthorizationGroupsWithDefault();
@@ -144,11 +149,10 @@ public class UserUtility {
     // database without any permissions cannot be accessed by non-administrative
     // users
     if (databasePermissions.isEmpty()) {
-      throw new AuthorizationException("This database does not have any associated permissions",
-        com.google.gwt.http.client.Response.SC_UNAUTHORIZED);
+      throw new AuthorizationException("This database does not have any associated permissions");
     }
 
-    for (String permission : databasePermissions) {
+    for (String permission : databasePermissions.keySet()) {
       AuthorizationGroup authorizationGroup = allAuthorizationGroups.get(permission);
       if (authorizationGroup != null) {
         // store permissions with associated groups.
@@ -162,7 +166,24 @@ public class UserUtility {
     for (AuthorizationGroup authorizationGroup : authorizationGroupsToCheck.getAuthorizationGroupsList()) {
       if (authorizationGroup.getAttributeOperator()
         .equals(ViewerConfiguration.PROPERTY_COLLECTIONS_AUTHORIZATION_GROUP_OPERATOR_EQUAL)) {
-        if (user.getAllRoles().contains(authorizationGroup.getAttributeValue())) {
+        LocalDateTime expiry = null;
+        LocalDateTime now = null;
+        if (databasePermissions.get(authorizationGroup.getAttributeValue()).hasExpiryDate()) {
+          expiry = LocalDateTime.ofInstant(
+            databasePermissions.get(authorizationGroup.getAttributeValue()).getExpiry().toInstant(), ZoneOffset.UTC);
+          String zoneIdString = ViewerConfiguration.getInstance().getViewerConfigurationAsString("UTC",
+            ViewerConstants.PROPERTY_EXPIRY_ZONE_ID_OVERRIDE);
+          ZoneId zoneId = null;
+          try {
+            zoneId = ZoneId.of(zoneIdString);
+          } catch (DateTimeException e) {
+            zoneId = ZoneOffset.UTC;
+          }
+          now = LocalDateTime.ofInstant(new Date().toInstant(), zoneId);
+        }
+
+        if (user.getAllRoles().contains(authorizationGroup.getAttributeValue())
+          && (expiry == null || expiry.isAfter(now))) {
           // User has permissions to access this database
           return;
         }
@@ -172,14 +193,28 @@ public class UserUtility {
     // If there is a permission on database that doesn't match witch any group, do a
     // simple verification with user roles
     for (String permission : permissionWithoutGroup) {
-      if (user.getAllRoles().contains(permission)) {
+      LocalDateTime expiry = null;
+      LocalDateTime now = null;
+      if (databasePermissions.get(permission).hasExpiryDate()) {
+        expiry = LocalDateTime.ofInstant(databasePermissions.get(permission).getExpiry().toInstant(), ZoneOffset.UTC);
+        String zoneIdString = ViewerConfiguration.getInstance().getViewerConfigurationAsString("UTC",
+          ViewerConstants.PROPERTY_EXPIRY_ZONE_ID_OVERRIDE);
+        ZoneId zoneId = null;
+        try {
+          zoneId = ZoneId.of(zoneIdString);
+        } catch (DateTimeException e) {
+          zoneId = ZoneOffset.UTC;
+        }
+        now = LocalDateTime.ofInstant(new Date().toInstant(), zoneId);
+      }
+
+      if (user.getAllRoles().contains(permission) && (expiry == null || expiry.isAfter(now))) {
         return;
       }
     }
 
     throw new AuthorizationException(
-      "The user '" + user.getId() + "' does not have the permissions needed to access database",
-      com.google.gwt.http.client.Response.SC_UNAUTHORIZED);
+      "The user '" + user.getId() + "' does not have the permissions needed to access database");
   }
 
   private static String getPasswordOrTicket(final HttpServletRequest request, User user, String databaseUUID)
@@ -582,7 +617,7 @@ public class UserUtility {
         }
       } catch (NotAuthorizedException e) {
         // do nothing, false will be returned
-      } catch (javax.ws.rs.NotFoundException e) {
+      } catch (jakarta.ws.rs.NotFoundException e) {
         LOGGER.debug("Could not find the specified DIP: {}", uri);
       } catch (BadRequestException e) {
         String responseText = e.getResponse().readEntity(String.class);

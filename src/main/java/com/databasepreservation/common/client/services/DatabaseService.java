@@ -7,23 +7,23 @@
  */
 package com.databasepreservation.common.client.services;
 
+import java.util.Date;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.core.MediaType;
-
+import com.databasepreservation.common.client.models.authorization.AuthorizationDetails;
 import org.fusesource.restygwt.client.DirectRestService;
 import org.fusesource.restygwt.client.MethodCallback;
 import org.fusesource.restygwt.client.REST;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 
+import com.databasepreservation.common.api.v1.utils.StringResponse;
 import com.databasepreservation.common.client.ViewerConstants;
 import com.databasepreservation.common.client.common.DefaultMethodCallback;
 import com.databasepreservation.common.client.index.FindRequest;
@@ -38,7 +38,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 /**
  * @author Miguel Guimarães <mguimaraes@keep.pt>
  */
-@Path(".." + ViewerConstants.ENDPOINT_DATABASE)
+@RequestMapping(path = ".." + ViewerConstants.ENDPOINT_DATABASE)
 @Tag(name = DatabaseService.SWAGGER_ENDPOINT)
 public interface DatabaseService extends DirectRestService {
   String SWAGGER_ENDPOINT = "v1 database";
@@ -67,36 +67,40 @@ public interface DatabaseService extends DirectRestService {
   /*******************************************************************************
    * Database Resource
    *******************************************************************************/
-  @POST
-  @Path("/find")
+  @RequestMapping(path = "/find", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
   @Operation(summary = "Finds databases")
-  IndexResult<ViewerDatabase> find(@Parameter(name = ViewerConstants.API_QUERY_PARAM_FILTER) FindRequest filter,
-    @QueryParam(ViewerConstants.API_QUERY_PARAM_LOCALE) String localeString);
+  IndexResult<ViewerDatabase> find(@RequestBody FindRequest findRequest,
+    @Parameter(name = ViewerConstants.API_QUERY_PARAM_LOCALE) @RequestParam(name = ViewerConstants.API_QUERY_PARAM_LOCALE) String localeString);
 
-  @POST
-  @Path("/")
-  @Produces(MediaType.TEXT_PLAIN)
+  @RequestMapping(path = "/findAll", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(summary = "Find in all databases")
+  IndexResult<ViewerDatabase> findAll(@RequestBody FindRequest findRequest,
+    @Parameter(name = ViewerConstants.API_QUERY_PARAM_LOCALE) @RequestParam(name = ViewerConstants.API_QUERY_PARAM_LOCALE) String localeString);
+
+  @RequestMapping(path = "/create", method = RequestMethod.POST, produces = MediaType.APPLICATION_JSON_VALUE)
   @Operation(summary = "Creates a database")
-  String create(@Parameter(name = "path") String path);
+  StringResponse create(@Parameter(name = "path") @RequestParam(name = "path") String path,
+    @Parameter(name = "version") @RequestParam(defaultValue = "V2_1", name = "version") ViewerConstants.SiardVersion version);
 
-  @GET
-  @Path("/{databaseUUID}")
+  @RequestMapping(path = "/{databaseUUID}", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
   @Operation(summary = "Retrieves a specific database")
-  ViewerDatabase retrieve(@PathParam("databaseUUID") String databaseUUID);
+  ViewerDatabase retrieve(@PathVariable(name = "databaseUUID") String databaseUUID);
 
-  @DELETE
-  @Path("/{databaseUUID}")
+  @RequestMapping(path = "/{databaseUUID}", method = RequestMethod.DELETE, produces = MediaType.APPLICATION_JSON_VALUE)
   @Operation(summary = "Deletes a specific database")
-  Boolean delete(@PathParam("databaseUUID") String databaseUUID);
+  Boolean delete(@PathVariable(name = "databaseUUID") String databaseUUID);
 
-  @GET
-  @Path("/{databaseUUID}/permissions")
+  @RequestMapping(path = "/{databaseUUID}/permissions", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
   @Operation(summary = "Gets the internal database configuration")
-  Set<String> getDatabasePermissions(@PathParam("databaseUUID") String databaseUUID);
+  Map<String, AuthorizationDetails> getDatabasePermissions(@PathVariable(name = "databaseUUID") String databaseUUID);
 
-  @PUT
-  @Path("/{databaseUUID}/permissions")
+  @RequestMapping(path = "/{databaseUUID}/permissions", method = RequestMethod.PUT, produces = MediaType.APPLICATION_JSON_VALUE)
   @Operation(summary = "Updates database permissions")
-  Set<String> updateDatabasePermissions(@PathParam("databaseUUID") String databaseUUID,
-    @Parameter(name = ViewerConstants.API_QUERY_PARAM_FILTER) Set<String> permissions);
+  Map<String, AuthorizationDetails> updateDatabasePermissions(@PathVariable(name = "databaseUUID") String databaseUUID,
+                                                              @Parameter(name = ViewerConstants.API_QUERY_PARAM_FILTER) @RequestBody Map<String, AuthorizationDetails> permissions);
+
+  @RequestMapping(path = "/{databaseUUID}/searchable", method = RequestMethod.PUT, produces = MediaType.APPLICATION_JSON_VALUE)
+  @Operation(summary = "Updates database permissions")
+  boolean updateDatabaseSearchAllAvailability(@PathVariable(name = "databaseUUID") String databaseUUID);
+
 }

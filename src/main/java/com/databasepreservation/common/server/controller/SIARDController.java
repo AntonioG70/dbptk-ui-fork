@@ -7,9 +7,6 @@
  */
 package com.databasepreservation.common.server.controller;
 
-import static com.databasepreservation.common.client.ViewerConstants.SOLR_INDEX_ROW_COLLECTION_NAME_PREFIX;
-import static com.databasepreservation.common.client.ViewerConstants.SOLR_SEARCHES_DATABASE_UUID;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.joda.time.DateTime;
@@ -39,6 +37,7 @@ import com.databasepreservation.common.client.ViewerConstants;
 import com.databasepreservation.common.client.common.search.SavedSearch;
 import com.databasepreservation.common.client.index.filter.Filter;
 import com.databasepreservation.common.client.index.filter.SimpleFilterParameter;
+import com.databasepreservation.common.client.models.authorization.AuthorizationDetails;
 import com.databasepreservation.common.client.models.dbptk.Module;
 import com.databasepreservation.common.client.models.parameters.PreservationParameter;
 import com.databasepreservation.common.client.models.parameters.SIARDUpdateParameters;
@@ -82,6 +81,9 @@ import com.databasepreservation.model.structure.DatabaseStructure;
 import com.databasepreservation.modules.config.ImportConfigurationModuleFactory;
 import com.databasepreservation.modules.jdbc.in.JDBCImportModule;
 import com.databasepreservation.modules.siard.SIARD2ModuleFactory;
+import com.databasepreservation.modules.siard.SIARDDK1007ModuleFactory;
+import com.databasepreservation.modules.siard.SIARDDK128ModuleFactory;
+import com.databasepreservation.modules.siard.SIARDDKEditFactory;
 import com.databasepreservation.modules.siard.SIARDEditFactory;
 import com.databasepreservation.modules.siard.SIARDValidateFactory;
 import com.databasepreservation.modules.viewer.DbvtkModuleFactory;
@@ -581,20 +583,23 @@ public class SIARDController {
     return module;
   }
 
-  public static String loadMetadataFromLocal(String localPath) throws GenericException {
+  public static String loadMetadataFromLocal(String localPath, ViewerConstants.SiardVersion siardVersion)
+    throws GenericException {
     String databaseUUID = SolrUtils.randomUUID();
-    return loadMetadataFromLocal(databaseUUID, localPath);
+    return loadMetadataFromLocal(databaseUUID, localPath, siardVersion);
   }
 
-  private static String loadMetadataFromLocal(String databaseUUID, String localPath) throws GenericException {
+  private static String loadMetadataFromLocal(String databaseUUID, String localPath,
+    ViewerConstants.SiardVersion siardVersion) throws GenericException {
     Path basePath = Paths.get(ViewerConfiguration.getInstance().getViewerConfigurationAsString("/",
       ViewerConfiguration.PROPERTY_BASE_UPLOAD_PATH));
     Path siardPath = basePath.resolve(localPath);
-    convertSIARDMetadataToSolr(siardPath, databaseUUID);
+    convertSIARDMetadataToSolr(siardPath, databaseUUID, siardVersion);
     return databaseUUID;
   }
 
-  private static void convertSIARDMetadataToSolr(Path siardPath, String databaseUUID) throws GenericException {
+  private static void convertSIARDMetadataToSolr(Path siardPath, String databaseUUID,
+    ViewerConstants.SiardVersion siardVersion) throws GenericException {
     validateSIARDLocation(siardPath);
 
     LOGGER.info("starting to import metadata database {}", siardPath.toAbsolutePath());
@@ -602,9 +607,16 @@ public class SIARDController {
     try {
       Reporter reporter = new NoOpReporter();
       SIARDEdition siardEdition = SIARDEdition.newInstance();
-
-      siardEdition.editModule(new SIARDEditFactory()).editModuleParameter(SIARDEditFactory.PARAMETER_FILE,
-        Collections.singletonList(siardPath.toAbsolutePath().toString()));
+      if (siardVersion.equals(ViewerConstants.SiardVersion.DK_1007)
+        || siardVersion.equals(ViewerConstants.SiardVersion.DK_128)) {
+        siardEdition.editModule(new SIARDDKEditFactory()).editModuleParameter(SIARDDKEditFactory.PARAMETER_FOLDER,
+          Collections.singletonList(siardPath.toAbsolutePath().toString()));
+      } else if (siardVersion.equals(ViewerConstants.SiardVersion.V2_1)) {
+        siardEdition.editModule(new SIARDEditFactory()).editModuleParameter(SIARDEditFactory.PARAMETER_FILE,
+          Collections.singletonList(siardPath.toAbsolutePath().toString()));
+      } else {
+        throw new SIARDVersionNotSupportedException();
+      }
 
       siardEdition.reporter(reporter);
 
@@ -618,11 +630,21 @@ public class SIARDController {
       viewerDatabase.setUuid(databaseUUID);
 
       viewerDatabase.setPath(siardPath.toAbsolutePath().toString());
-      viewerDatabase.setSize(siardPath.toFile().length());
+
+      if (siardVersion.equals(ViewerConstants.SiardVersion.DK_1007)
+        || siardVersion.equals(ViewerConstants.SiardVersion.DK_128)) {
+        viewerDatabase.setSize(FileUtils.sizeOfDirectory(siardPath.toFile()));
+      } else {
+        viewerDatabase.setSize(siardPath.toFile().length());
+      }
+
       viewerDatabase.setVersion(siardEdition.getSIARDVersion());
+      viewerDatabase.setAvailableToSearchAll(ViewerConfiguration.getInstance().getViewerConfigurationAsBoolean(true,
+        ViewerConfiguration.SIARD_AVAILABLE_TO_SEARCH_ALL));
       viewerDatabase.setValidationStatus(ViewerDatabaseValidationStatus.NOT_VALIDATED);
 
-      Set<String> authorizationDefault = ViewerConfiguration.getInstance().getCollectionsAuthorizationDefault();
+      Map<String, AuthorizationDetails> authorizationDefault = ViewerConfiguration.getInstance()
+        .getCollectionsAuthorizationDefault();
       if (!authorizationDefault.isEmpty()) {
         viewerDatabase.setPermissions(authorizationDefault);
       }
@@ -667,13 +689,14 @@ public class SIARDController {
     }
   }
 
-  public static String loadFromLocal(String localPath, String databaseUUID) throws GenericException {
+  public static String loadFromLocal(String localPath, String databaseUUID, String siardVersion)
+    throws GenericException {
     LOGGER.info("Preparing the SIARD to be browsable ({})", databaseUUID);
     Path basePath = Paths.get(ViewerConfiguration.getInstance().getViewerConfigurationAsString("/",
       ViewerConfiguration.PROPERTY_BASE_UPLOAD_PATH));
     try {
       Path siardPath = basePath.resolve(localPath);
-      convertSIARDtoSolr(siardPath, databaseUUID);
+      convertSIARDtoSolr(siardPath, databaseUUID, siardVersion);
       LOGGER.info("Conversion to SIARD successful, database: {}", databaseUUID);
     } catch (GenericException e) {
       LOGGER.error("Conversion to SIARD failed for database {}", databaseUUID, e);
@@ -682,7 +705,8 @@ public class SIARDController {
     return databaseUUID;
   }
 
-  private static void convertSIARDtoSolr(Path siardPath, String databaseUUID) throws GenericException {
+  private static void convertSIARDtoSolr(Path siardPath, String databaseUUID, String siardVersion)
+    throws GenericException {
     validateSIARDLocation(siardPath);
 
     LOGGER.info("starting to convert database {}", siardPath.toAbsolutePath());
@@ -697,9 +721,23 @@ public class SIARDController {
       // XXX remove this workaround after fix of NPE
       databaseMigration.filterFactories(new ArrayList<>());
 
-      databaseMigration.importModule(new SIARD2ModuleFactory())
-        .importModuleParameter(SIARD2ModuleFactory.PARAMETER_FILE, siardPath.toAbsolutePath().toString())
-        .importModuleParameter(SIARD2ModuleFactory.PARAMETER_IGNORE_LOBS, "true");
+      if (siardVersion.equals(ViewerConstants.SIARD_DK_128)) {
+        databaseMigration.importModule(new SIARDDK128ModuleFactory())
+          .importModuleParameter(SIARDDK128ModuleFactory.PARAMETER_FOLDER, siardPath.toAbsolutePath().toString())
+          .importModuleParameter(SIARDDK128ModuleFactory.PARAMETER_AS_SCHEMA,
+            ViewerConstants.SIARDDK_DEFAULT_SCHEMA_NAME);
+      } else if (siardVersion.equals(ViewerConstants.SIARD_DK_1007)) {
+        databaseMigration.importModule(new SIARDDK1007ModuleFactory())
+          .importModuleParameter(SIARDDK1007ModuleFactory.PARAMETER_FOLDER, siardPath.toAbsolutePath().toString())
+          .importModuleParameter(SIARDDK1007ModuleFactory.PARAMETER_AS_SCHEMA,
+            ViewerConstants.SIARDDK_DEFAULT_SCHEMA_NAME);
+      } else if (siardVersion.equals(ViewerConstants.SIARD_V21)) {
+        databaseMigration.importModule(new SIARD2ModuleFactory())
+          .importModuleParameter(SIARD2ModuleFactory.PARAMETER_FILE, siardPath.toAbsolutePath().toString())
+          .importModuleParameter(SIARD2ModuleFactory.PARAMETER_IGNORE_LOBS, "true");
+      } else {
+        throw new GenericException("SIARD version not supported");
+      }
 
       databaseMigration.exportModule(new DbvtkModuleFactory())
         .exportModuleParameter(DbvtkModuleFactory.PARAMETER_DATABASE_UUID, databaseUUID);
@@ -833,11 +871,18 @@ public class SIARDController {
     solrManager.updateSIARDValidationInformation(databaseUUID, status, null, null, new DateTime().toString());
   }
 
-  public static Set<String> updateDatabasePermissions(String databaseUUID, Set<String> permissions)
-    throws GenericException, ViewerException {
+  public static Map<String, AuthorizationDetails> updateDatabasePermissions(String databaseUUID,
+    Map<String, AuthorizationDetails> permissions) throws GenericException, ViewerException {
     final DatabaseRowsSolrManager solrManager = ViewerFactory.getSolrManager();
     solrManager.updateDatabasePermissions(databaseUUID, permissions);
     return permissions;
+  }
+
+  public static boolean updateDatabaseSearchAllAvailability(String databaseUUID)
+    throws GenericException, ViewerException, NotFoundException {
+    final DatabaseRowsSolrManager solrManager = ViewerFactory.getSolrManager();
+    ViewerDatabase database = solrManager.retrieve(ViewerDatabase.class, databaseUUID);
+    return solrManager.updateDatabaseSearchAllAvailability(databaseUUID, !database.isAvailableToSearchAll());
   }
 
   public static boolean deleteAll(String databaseUUID)
@@ -846,17 +891,20 @@ public class SIARDController {
 
     ViewerDatabase database = solrManager.retrieve(ViewerDatabase.class, databaseUUID);
 
-    if (ViewerFactory.getViewerConfiguration().getApplicationEnvironment()
-      .equals(ViewerConstants.APPLICATION_ENV_SERVER)) {
-      String siardPath = database.getPath();
-      final boolean deleteSiard = !ViewerConfiguration.getInstance().getViewerConfigurationAsBoolean(false,
-        ViewerConfiguration.PROPERTY_DISABLE_SIARD_DELETION);
-      if (StringUtils.isNotBlank(siardPath) && Paths.get(siardPath).toFile().exists() && deleteSiard) {
-        deleteSIARDFileFromPath(siardPath, databaseUUID);
+    if (!database.getVersion().equals(ViewerConstants.SIARD_DK_1007)
+      && !database.getVersion().equals(ViewerConstants.SIARD_DK_128)) {
+      if (ViewerFactory.getViewerConfiguration().getApplicationEnvironment()
+        .equals(ViewerConstants.APPLICATION_ENV_SERVER)) {
+        String siardPath = database.getPath();
+        final boolean deleteSiard = !ViewerConfiguration.getInstance().getViewerConfigurationAsBoolean(false,
+          ViewerConfiguration.PROPERTY_DISABLE_SIARD_DELETION);
+        if (StringUtils.isNotBlank(siardPath) && Paths.get(siardPath).toFile().exists() && deleteSiard) {
+          deleteSIARDFileFromPath(siardPath, databaseUUID);
+        }
       }
-    }
 
-    ViewerFactory.getConfigurationManager().deleteDatabaseFolder(databaseUUID);
+      ViewerFactory.getConfigurationManager().deleteDatabaseFolder(databaseUUID);
+    }
 
     String reportPath = database.getValidatorReportPath();
     if (StringUtils.isNotBlank(reportPath) && Paths.get(reportPath).toFile().exists()) {
@@ -865,9 +913,10 @@ public class SIARDController {
 
     if (database.getStatus().equals(ViewerDatabaseStatus.AVAILABLE)
       || database.getStatus().equals(ViewerDatabaseStatus.ERROR)) {
-      final String collectionName = SOLR_INDEX_ROW_COLLECTION_NAME_PREFIX + databaseUUID;
+      final String collectionName = ViewerConstants.SOLR_INDEX_ROW_COLLECTION_NAME_PREFIX + databaseUUID;
       if (SolrClientFactory.get().deleteCollection(collectionName)) {
-        Filter savedSearchFilter = new Filter(new SimpleFilterParameter(SOLR_SEARCHES_DATABASE_UUID, databaseUUID));
+        Filter savedSearchFilter = new Filter(
+          new SimpleFilterParameter(ViewerConstants.SOLR_SEARCHES_DATABASE_UUID, databaseUUID));
         SolrUtils.delete(ViewerFactory.getSolrClient(), SolrDefaultCollectionRegistry.get(SavedSearch.class),
           savedSearchFilter);
 

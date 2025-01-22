@@ -7,15 +7,19 @@
  */
 package com.databasepreservation.common.client.models.structure;
 
-import com.databasepreservation.common.client.index.IsIndexed;
+import java.io.Serial;
+import java.util.Map;
 
-import java.util.Set;
+import com.databasepreservation.common.client.index.IsIndexed;
+import com.databasepreservation.common.client.models.authorization.AuthorizationDetails;
 
 /**
  * @author Bruno Ferreira <bferreira@keep.pt>
  */
 public class ViewerDatabase extends IsIndexed {
 
+  @Serial
+  private static final long serialVersionUID = 1013133463092757934L;
   private String uuid;
   private ViewerDatabaseStatus status;
   private ViewerMetadata metadata;
@@ -30,10 +34,14 @@ public class ViewerDatabase extends IsIndexed {
   private String validatorReportPath;
   private ViewerDatabaseValidationStatus validationStatus;
   private String validationPassed;
+  private String validationFailed;
   private String validationErrors;
   private String validationWarnings;
   private String validationSkipped;
-  private Set<String> permissions;
+  private Map<String, AuthorizationDetails> permissions;
+  private boolean isAvailableToSearchAll;
+
+  private long searchHits = -1;
 
   public ViewerDatabase() {
   }
@@ -101,7 +109,6 @@ public class ViewerDatabase extends IsIndexed {
     this.metadata = metadata;
   }
 
-
   public void setPath(String path) {
     this.path = path;
   }
@@ -126,9 +133,16 @@ public class ViewerDatabase extends IsIndexed {
     this.version = version;
   }
 
-
   public String getValidatedAt() {
     return validatedAt;
+  }
+
+  public boolean isAvailableToSearchAll() {
+    return isAvailableToSearchAll;
+  }
+
+  public void setAvailableToSearchAll(boolean availableToSearchAll) {
+    isAvailableToSearchAll = availableToSearchAll;
   }
 
   public void setValidatedAt(String validatedAt) {
@@ -153,6 +167,14 @@ public class ViewerDatabase extends IsIndexed {
 
   public String getValidationPassed() {
     return validationPassed;
+  }
+
+  public String getValidationFailed() {
+    return validationFailed;
+  }
+
+  public void setValidationFailed(String validationFailed) {
+    this.validationFailed = validationFailed;
   }
 
   public void setValidationErrors(String validationErrors) {
@@ -199,11 +221,19 @@ public class ViewerDatabase extends IsIndexed {
     return loadedAt;
   }
 
-  public Set<String> getPermissions() {
+  public Map<String, AuthorizationDetails> getPermissions() {
     return permissions;
   }
 
-  public void setPermissions(Set<String> permissions) {
+  public void setPermissions(Map<String, AuthorizationDetails> permissions) {
     this.permissions = permissions;
+  }
+
+  public long getSearchHits() {
+    return searchHits;
+  }
+
+  public void setSearchHits(long searchHits) {
+    this.searchHits = searchHits;
   }
 }

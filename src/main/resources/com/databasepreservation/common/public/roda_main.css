@@ -1227,6 +1227,7 @@ pre code {
     padding-right: 5px;
     content: "\f107";
     font-family: "Font Awesome 5 Free";
+    font-weight: 900
 }
 
 .open .dropdown-label:after {
@@ -3305,6 +3306,21 @@ td.datePickerMonth, td.datePickerYear {
     vertical-align: top;
 }
 
+.searchPanelLeftInputRow {
+    display: flex;
+    flex-direction: row;
+}
+
+.selectedDatabasesLink {
+    flex-shrink: 0;
+    padding-left: 10px;
+    padding-right: 10px;
+    margin: auto;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
 .searchPanelRight {
     float: right;
     width: 40px;
@@ -3322,6 +3338,18 @@ td.datePickerMonth, td.datePickerYear {
 }
 
 .searchBox {
+    box-sizing: border-box;
+    width: 100%;
+    height: 4rem;
+    line-height: 4rem;
+    font-size: 2rem;
+    border: none;
+    padding: 0 1rem;
+    background-color: #eee;
+}
+
+.searchBox-permissions {
+    margin-bottom: 10px;
     box-sizing: border-box;
     width: 100%;
     height: 4rem;
@@ -3573,6 +3601,10 @@ td.datePickerMonth, td.datePickerYear {
 
 .wui-dialog-confirm, .wui-dialog-information {
 
+}
+
+.wui-dialog-edit-permissions {
+    top: 15% !important
 }
 
 .wui-dialog-layout {

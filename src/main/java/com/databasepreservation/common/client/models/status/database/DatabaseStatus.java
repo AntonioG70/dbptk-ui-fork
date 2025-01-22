@@ -9,18 +9,19 @@ package com.databasepreservation.common.client.models.status.database;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 
 import com.databasepreservation.common.client.ViewerConstants;
+import com.databasepreservation.common.client.models.authorization.AuthorizationDetails;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 /**
  * @author Miguel Guimarães <mguimaraes@keep.pt>
  */
-@JsonPropertyOrder({"version", "id", "siard", "validation", "collections"})
+@JsonPropertyOrder({"version", "id", "siard", "validation", "collections", "availableToSearchAll"})
 public class DatabaseStatus implements Serializable {
 
   private String version = ViewerConstants.DATABASE_STATUS_VERSION;
@@ -28,30 +29,34 @@ public class DatabaseStatus implements Serializable {
   private SiardStatus siardStatus;
   private ValidationStatus validationStatus;
   private List<String> collections;
-  private Set<String> permissions;
+  private Map<String, AuthorizationDetails> permissions;
+  private boolean availableToSearchAll;
 
   public DatabaseStatus() {
     collections = new ArrayList<>();
-    permissions = new HashSet<>();
+    permissions = new HashMap<>();
+    availableToSearchAll = true;
   }
 
   public DatabaseStatus(String version, String id, SiardStatus siardStatus, ValidationStatus validationStatus,
-    List<String> collections, Set<String> permissions ) {
+    List<String> collections, Map<String, AuthorizationDetails> permissions, boolean availableToSearchAll) {
     this.version = version;
     this.id = id;
     this.siardStatus = siardStatus;
     this.validationStatus = validationStatus;
     this.collections = collections;
     this.permissions = permissions;
+    this.availableToSearchAll = availableToSearchAll;
   }
 
-  public DatabaseStatus(DatabaseStatus status, Set<String> permissions) {
+  public DatabaseStatus(DatabaseStatus status, Map<String, AuthorizationDetails> permissions) {
     this.version = status.getVersion();
     this.id = status.getId();
     this.siardStatus = status.getSiardStatus();
     this.validationStatus = status.getValidationStatus();
     this.collections = status.getCollections();
     this.permissions = status.getPermissions();
+    this.availableToSearchAll = status.isAvailableToSearchAll();
   }
 
   public String getVersion() {
@@ -68,6 +73,14 @@ public class DatabaseStatus implements Serializable {
 
   public void setId(String id) {
     this.id = id;
+  }
+
+  public boolean isAvailableToSearchAll() {
+    return availableToSearchAll;
+  }
+
+  public void setAvailableToSearchAll(boolean availableToSearchAll) {
+    this.availableToSearchAll = availableToSearchAll;
   }
 
   @JsonProperty("siard")
@@ -100,11 +113,11 @@ public class DatabaseStatus implements Serializable {
     this.collections.add(collection);
   }
 
-  public Set<String> getPermissions() {
+  public Map<String, AuthorizationDetails> getPermissions() {
     return permissions;
   }
 
-  public void setPermissions(Set<String> permissions) {
+  public void setPermissions(Map<String, AuthorizationDetails> permissions) {
     this.permissions = permissions;
   }
 }

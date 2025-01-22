@@ -336,7 +336,7 @@ p[data-value]:after {
 }
 
 .search-field-left-panel .form-textbox-small {
-    max-width: 100px;
+    max-width: 15ch;
 }
 
 .search-field-left-panel .label {
@@ -1069,6 +1069,14 @@ p[data-value]:after {
     margin-bottom: 10px;
 }
 
+.siards-not-loaded-info {
+    margin-top: -30px;
+}
+
+.siards-contact-admin-info {
+    margin-bottom: 5px;
+}
+
 .btn-pull-right {
     padding-right: 0 !important;
 }
@@ -1408,6 +1416,16 @@ html, body {
     text-decoration: none;
 }
 
+.btn-searchall-dialog {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.btn-searchall-dialog i {
+    font-size: 20px
+}
+
 .label-field {
     display: inline-block;
     text-align: left;
@@ -1444,6 +1462,7 @@ html, body {
 }
 
 .button-group-panel-btn .btn {
+    margin-top: 5px;
     width: 100%;
     padding: 8px;
     text-align: center;
@@ -2272,6 +2291,10 @@ html, body {
 /***********************************************
 				    CHECKBOX
 ************************************************/
+.scrollable-panel {
+    max-height: 500px;
+    overflow-y: auto;
+}
 /*
 .my-asyncdatagrid-display-scroll-wrapper input[type="checkbox"] {
     padding-left: 5px;
@@ -3433,6 +3456,31 @@ rgba(0, 0, 0, .125);
     z-index: 1;
 }
 
+.searchall-button-row {
+    display: flex;
+    flex-direction: row;
+}
+
+.searchall-button-row-left {
+    display: flex;
+    flex: 1;
+    flex-direction: row;
+}
+
+.searchall-button-row-right {
+    display: flex;
+    flex-direction: row;
+}
+
+.searchall-button-row-left .btn, .searchall-button-row-right .btn {
+    padding: 10px 20px 10px 20px;
+}
+
+.searchall-warning {
+    padding: 20px 0px 20px 0px;
+    font-weight: bold;
+}
+
 /************************************************
 * Permission Panel
  ************************************************/
@@ -3449,4 +3497,49 @@ rgba(0, 0, 0, .125);
     text-overflow: ellipsis;
     overflow: hidden;
     white-space: nowrap;
+}
+
+.permissions_date_picker {
+    z-index: 5000;
+}
+
+.expiry_column div {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 5px;
+}
+
+.expiry_column button {
+    flex: 1;
+    padding: 3px 0px;
+    font-size: 1.3rem;
+}
+
+.expiry_column button:disabled {
+    flex: 0;
+}
+
+.datepicker_dialog {
+    display: flex;
+    justify-content: center;
+    padding: 10px;
+}
+
+.datepicker_dialog_row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
+/************************************************
+* Universal embedded viewer
+ ************************************************/
+
+.embedded-iiif-viewer{
+    height: 150vh;
+    width: 70vw;
+    display: inline-block;
+    vertical-align: top;
+    margin-top: 30px;
 }

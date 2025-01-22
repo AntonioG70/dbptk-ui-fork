@@ -7,18 +7,19 @@
  */
 package com.databasepreservation.common.client.tools;
 
+import static com.databasepreservation.common.client.ViewerConstants.API_QUERY_ASSIGN_SYMBOL;
+import static com.databasepreservation.common.client.ViewerConstants.API_QUERY_SEP;
+
 import java.util.ArrayList;
 import java.util.List;
 
+import com.databasepreservation.common.client.ClientConfigurationManager;
 import com.databasepreservation.common.client.ViewerConstants;
 import com.databasepreservation.common.client.common.utils.UriQueryUtils;
 import com.databasepreservation.common.client.index.FindRequest;
 import com.google.gwt.core.client.GWT;
 import com.google.gwt.safehtml.shared.SafeUri;
 import com.google.gwt.safehtml.shared.UriUtils;
-
-import static com.databasepreservation.common.client.ViewerConstants.API_QUERY_ASSIGN_SYMBOL;
-import static com.databasepreservation.common.client.ViewerConstants.API_QUERY_SEP;
 
 public class RestUtils {
 
@@ -38,8 +39,7 @@ public class RestUtils {
     // api/v1/file/download/siard/
     String b = ViewerConstants.API_SERVLET + ViewerConstants.API_V1_FILE_RESOURCE + ViewerConstants.API_SEP
       + ViewerConstants.API_PATH_PARAM_DOWNLOAD + ViewerConstants.API_SEP + ViewerConstants.API_PATH_PARAM_SIARD
-      + ViewerConstants.API_QUERY_START + ViewerConstants.API_PATH_PARAM_FILENAME
-      + API_QUERY_ASSIGN_SYMBOL + filename;
+      + ViewerConstants.API_QUERY_START + ViewerConstants.API_PATH_PARAM_FILENAME + API_QUERY_ASSIGN_SYMBOL + filename;
     return UriUtils.fromSafeConstant(b);
   }
 
@@ -61,6 +61,15 @@ public class RestUtils {
       + databaseUUID + "/collection/" + databaseUUID + "/data/" + schemaName + "/" + tableName + "/" + rowIndex + "/"
       + columnIndex;
   }
+
+  public static String createUVLob() {
+    return ClientConfigurationManager.getStringWithDefault("uv", ViewerConstants.IIIF_EXTERNAL_VIEWER_SERVICE_NAME)
+      + "/#?iiifManifestId=" + GWT.getHostPageBaseURL() + ClientConfigurationManager.getStringWithDefault(
+        "presentation", ViewerConstants.PRESENTATION_EXTERNAL_SERVICE_NAME)
+      + "/manifest?downloadLink=";
+  }
+
+
 
   public static String createExportTableUri(String databaseUUID, String schemaName, String tableName,
     FindRequest findRequest, String zipFilename, String filename, boolean descriptions, boolean lobs,
@@ -115,16 +124,14 @@ public class RestUtils {
       header.append(ViewerConstants.API_QUERY_PARAM_FILTER).append(API_QUERY_ASSIGN_SYMBOL)
         .append(UriQueryUtils.encodeQuery(paramFindRequest)).append(API_QUERY_SEP);
     }
-    header.append("filename").append(API_QUERY_ASSIGN_SYMBOL)
-      .append(UriQueryUtils.encodeQuery(filename)).append(API_QUERY_SEP);
+    header.append("filename").append(API_QUERY_ASSIGN_SYMBOL).append(UriQueryUtils.encodeQuery(filename))
+      .append(API_QUERY_SEP);
     if (lobs) {
-      header.append("zipFilename").append(API_QUERY_ASSIGN_SYMBOL)
-        .append(UriQueryUtils.encodeQuery(zipFilename)).append(API_QUERY_SEP);
+      header.append("zipFilename").append(API_QUERY_ASSIGN_SYMBOL).append(UriQueryUtils.encodeQuery(zipFilename))
+        .append(API_QUERY_SEP);
     }
-    header.append("descriptions").append(API_QUERY_ASSIGN_SYMBOL).append(descriptions)
-      .append(API_QUERY_SEP);
-    header.append("lobs").append(API_QUERY_ASSIGN_SYMBOL).append(lobs)
-      .append(API_QUERY_SEP);
+    header.append("descriptions").append(API_QUERY_ASSIGN_SYMBOL).append(descriptions).append(API_QUERY_SEP);
+    header.append("lobs").append(API_QUERY_ASSIGN_SYMBOL).append(lobs).append(API_QUERY_SEP);
 
     if (!fieldsToHeader.isEmpty()) {
       header.append("fl").append(API_QUERY_ASSIGN_SYMBOL)
@@ -138,7 +145,7 @@ public class RestUtils {
     // api/v1/theme/?resource_id={resourceId}&default_resource_od={defaultResourceId}
     StringBuilder b = new StringBuilder();
 
-    b.append(ViewerConstants.API_SERVLET).append(ViewerConstants.API_V1_THEME_RESOURCE).append(ViewerConstants.API_SEP)
+    b.append(ViewerConstants.API_SERVLET).append(ViewerConstants.API_V1_THEME_RESOURCE)
       .append(ViewerConstants.API_QUERY_START).append(ViewerConstants.API_QUERY_PARAM_RESOURCE_ID)
       .append(API_QUERY_ASSIGN_SYMBOL).append(resourceId);
 
@@ -148,8 +155,8 @@ public class RestUtils {
     }
 
     if (inline) {
-      b.append(API_QUERY_SEP).append(ViewerConstants.API_QUERY_PARAM_INLINE)
-        .append(API_QUERY_ASSIGN_SYMBOL).append(inline);
+      b.append(API_QUERY_SEP).append(ViewerConstants.API_QUERY_PARAM_INLINE).append(API_QUERY_ASSIGN_SYMBOL)
+        .append(inline);
     }
 
     return UriUtils.fromSafeConstant(b.toString());

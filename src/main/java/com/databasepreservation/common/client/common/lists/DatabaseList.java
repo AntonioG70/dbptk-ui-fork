@@ -55,7 +55,7 @@ import config.i18n.client.ClientMessages;
  * @author Bruno Ferreira <bferreira@keep.pt>
  */
 public class DatabaseList extends BasicAsyncTableCell<ViewerDatabase> {
-  private static final ClientMessages messages = GWT.create(ClientMessages.class);
+  protected static final ClientMessages messages = GWT.create(ClientMessages.class);
   private final ClientLogger logger = new ClientLogger(getClass().getName());
 
   private static final String OPEN_VALIDATED_SPAN = "<span>&#10004;</span>";
@@ -65,7 +65,7 @@ public class DatabaseList extends BasicAsyncTableCell<ViewerDatabase> {
     this(new Filter(), null, null, false, false);
   }
 
-  private DatabaseList(Filter filter, Facets facets, String summary, boolean selectable, boolean exportable) {
+  protected DatabaseList(Filter filter, Facets facets, String summary, boolean selectable, boolean exportable) {
     super(filter, facets, summary, selectable, exportable, 15, 15);
     autoUpdate(10000);
   }
@@ -77,7 +77,7 @@ public class DatabaseList extends BasicAsyncTableCell<ViewerDatabase> {
     Column<ViewerDatabase, SafeHtml> nameColumn = new TooltipColumn<ViewerDatabase>() {
       @Override
       public SafeHtml getValue(ViewerDatabase database) {
-        return database != null && database.getMetadata() != null
+        return database != null && database.getMetadata() != null && database.getMetadata().getName() != null
           ? SafeHtmlUtils.fromString(database.getMetadata().getName())
           : SafeHtmlUtils.fromString("unknown");
       }
@@ -86,7 +86,7 @@ public class DatabaseList extends BasicAsyncTableCell<ViewerDatabase> {
     Column<ViewerDatabase, SafeHtml> description = new TooltipColumn<ViewerDatabase>() {
       @Override
       public SafeHtml getValue(ViewerDatabase database) {
-        return database != null && database.getMetadata() != null
+        return database != null && database.getMetadata() != null && database.getMetadata().getDescription() != null
           ? SafeHtmlUtils.fromString(database.getMetadata().getDescription())
           : SafeHtmlUtils.fromString("unknown");
       }
@@ -95,7 +95,7 @@ public class DatabaseList extends BasicAsyncTableCell<ViewerDatabase> {
     Column<ViewerDatabase, SafeHtml> dbmsColumn = new TooltipColumn<ViewerDatabase>() {
       @Override
       public SafeHtml getValue(ViewerDatabase database) {
-        return database != null && database.getMetadata() != null
+        return database != null && database.getMetadata() != null && database.getMetadata().getDatabaseProduct() != null
           ? SafeHtmlUtils.fromString(database.getMetadata().getDatabaseProduct())
           : SafeHtmlUtils.fromString("unknown");
       }
@@ -104,7 +104,7 @@ public class DatabaseList extends BasicAsyncTableCell<ViewerDatabase> {
     Column<ViewerDatabase, SafeHtml> dataOwnerColumn = new TooltipColumn<ViewerDatabase>() {
       @Override
       public SafeHtml getValue(ViewerDatabase database) {
-        return database != null && database.getMetadata() != null
+        return database != null && database.getMetadata() != null && database.getMetadata().getDataOwner() != null
           ? SafeHtmlUtils.fromString(database.getMetadata().getDataOwner())
           : SafeHtmlUtils.fromString("unknown");
       }
@@ -114,6 +114,7 @@ public class DatabaseList extends BasicAsyncTableCell<ViewerDatabase> {
       @Override
       public SafeHtml getValue(ViewerDatabase database) {
         return database != null && database.getMetadata() != null
+          && database.getMetadata().getArchivalDate() != null
           ? SafeHtmlUtils.fromString(database.getMetadata().getArchivalDate().substring(0, 10))
           : null;
       }

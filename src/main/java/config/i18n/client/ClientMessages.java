@@ -172,6 +172,8 @@ public interface ClientMessages extends Messages {
 
   String row_downloadLOB();
 
+  String row_openLOBViewer();
+
   String references_isRelatedTo();
 
   String references_isReferencedBy();
@@ -362,6 +364,8 @@ public interface ClientMessages extends Messages {
 
   String ofOver();
 
+  String ofMany();
+
   String showMore();
 
   String showLess();
@@ -512,6 +516,8 @@ public interface ClientMessages extends Messages {
 
   String humanizedTextForViewerJobStatus(@Select String status);
 
+  String someOfAObject(@Select String objectClass);
+
   /********************************************
    * Basic Table Headers
    ********************************************/
@@ -545,6 +551,8 @@ public interface ClientMessages extends Messages {
   String basicActionBack();
 
   String basicActionSkip();
+
+  String basicActionSelect();
 
   String basicActionSelectAll();
 
@@ -700,7 +708,35 @@ public interface ClientMessages extends Messages {
 
   String managePageTableHeaderTextForActions();
 
+  String managePageTableHeaderTextForSearchHits();
+
   String manageDatabasePageDescription();
+
+  String manageDatabaseSearchAllResults();
+
+  String manageDatabaseSearchAllSelectDatabases();
+
+  String manageDatabaseSearchAllSearchingOn(String total);
+
+  String manageDatabaseSearchAllNoneSelected();
+
+  String manageDatabaseSearchAllAllowedInfo();
+
+  String manageDatabaseSearchAllExcludedLoaded(long totalUnloaded);
+
+  String manageDatabaseSearchAllExcludedPrivacy(long totalPrivate);
+
+  String manageDatabaseSearchAllContactInfo();
+
+  String manageDatabaseNotLoadedDescription(long number);
+
+  String manageDatabaseNotSearchableDescription(long number);
+
+  String manageDatabaseAllLoadedDescription();
+
+  String manageDatabaseAllSearchableDescription();
+
+  String manageDatabaseContactAdministratorDescription();
 
   /********************************************
    * SIARD Home Page
@@ -712,6 +748,10 @@ public interface ClientMessages extends Messages {
   String SIARDHomePageToastTitle(String method);
 
   String SIARDHomePageButtonTextEditMetadata();
+
+  String SIARDHomePageButtonTitleEditMetadataNotAvailable();
+
+  String SIARDHomePageButtonTextEditMetadataNotAvailable(String version);
 
   String SIARDHomePageButtonTextMigrateToSIARD();
 
@@ -825,6 +865,10 @@ public interface ClientMessages extends Messages {
 
   SafeHtml SIARDHomePageTextForDeleteSIARD();
 
+  String SIARDHomePageTitleForDeleteSIARDNotAvailable();
+
+  String SIARDHomePageTextForDeleteSIARDNotAvailable(String version);
+
   SafeHtml SIARDHomePageTextForDeleteSIARDReportValidation();
 
   String SIARDHomePageTextForIngestNotSupported();
@@ -851,7 +895,17 @@ public interface ClientMessages extends Messages {
 
   String SIARDHomePageLabelForPermissionsTableGroupAttributeValue();
 
+  String SIARDHomePageLabelForPermissionsTableGroupExpiryDate();
+
+  String SIARDHomePageLabelForPermissionsTableButtonNoExpiryDate();
+
+  String SIARDHomePageLabelForPermissionsRadioButtonPickDate();
+
+  String SIARDHomePageLabelForPermissionsRadioButtonNever();
+
   String SIARDHomePageDialogTitleForPermissionsList();
+
+  String SIARDHomePageDialogTitleForChangeAvailabilityToSearchAll();
 
   SafeHtml SIARDHomePageDialogDescriptionForPermissionsList();
 
@@ -859,11 +913,17 @@ public interface ClientMessages extends Messages {
 
   String SIARDHomePageDialogMessageForPermissionsList();
 
+  String SIARDHomePageDialogMessageForChangeAvailabilityToSearchAll();
+
   String SIARDHomePageDialogDetailsForUnknownPermission();
 
   String SIARDHomePageDialogDetailsForUnknownPermissions(String permissions);
 
   String SIARDHomePageDialogActionForOverridePermissions();
+
+  String SIARDHomePageTitleForPermissionsSwitchButton();
+
+  String SIARDHomePageTitleForDateEdit();
 
   /********************************************
    * Edit Metadata

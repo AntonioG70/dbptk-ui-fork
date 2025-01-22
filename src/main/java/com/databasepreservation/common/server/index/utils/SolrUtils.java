@@ -27,11 +27,13 @@ import java.util.Set;
 import java.util.TimeZone;
 import java.util.UUID;
 
-import com.databasepreservation.common.server.index.schema.SolrDefaultCollectionRegistry;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.request.CollectionAdminRequest;
+import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.client.solrj.response.FacetField;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
@@ -41,6 +43,7 @@ import org.apache.solr.common.params.CursorMarkParams;
 import org.apache.solr.common.params.FacetParams;
 import org.apache.solr.common.params.MapSolrParams;
 import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.NamedList;
 import org.roda.core.data.common.RodaConstants;
 import org.roda.core.data.exceptions.GenericException;
 import org.roda.core.data.exceptions.NotFoundException;
@@ -49,6 +52,7 @@ import org.roda.core.data.v2.index.sublist.Sublist;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.databasepreservation.common.client.ViewerConstants;
 import com.databasepreservation.common.client.common.search.SavedSearch;
 import com.databasepreservation.common.client.index.IndexResult;
 import com.databasepreservation.common.client.index.IsIndexed;
@@ -59,6 +63,7 @@ import com.databasepreservation.common.client.index.facets.RangeFacetParameter;
 import com.databasepreservation.common.client.index.facets.SimpleFacetParameter;
 import com.databasepreservation.common.client.index.filter.AndFiltersParameters;
 import com.databasepreservation.common.client.index.filter.BasicSearchFilterParameter;
+import com.databasepreservation.common.client.index.filter.BlockJoinAnyParentExpiryFilterParameter;
 import com.databasepreservation.common.client.index.filter.BlockJoinParentFilterParameter;
 import com.databasepreservation.common.client.index.filter.DateIntervalFilterParameter;
 import com.databasepreservation.common.client.index.filter.DateRangeFilterParameter;
@@ -74,11 +79,13 @@ import com.databasepreservation.common.client.index.filter.OrFiltersParameters;
 import com.databasepreservation.common.client.index.filter.SimpleFilterParameter;
 import com.databasepreservation.common.client.index.sort.SortParameter;
 import com.databasepreservation.common.client.index.sort.Sorter;
+import com.databasepreservation.common.client.models.authorization.AuthorizationDetails;
 import com.databasepreservation.common.client.models.structure.ViewerDatabase;
 import com.databasepreservation.common.client.models.structure.ViewerRow;
 import com.databasepreservation.common.exceptions.ViewerException;
 import com.databasepreservation.common.filter.solr.TermsFilterParameter;
 import com.databasepreservation.common.server.index.schema.SolrCollection;
+import com.databasepreservation.common.server.index.schema.SolrDefaultCollectionRegistry;
 import com.databasepreservation.common.server.index.schema.SolrRowsCollectionRegistry;
 import com.databasepreservation.common.server.index.schema.collections.RowsCollection;
 
@@ -88,7 +95,7 @@ import com.databasepreservation.common.server.index.schema.collections.RowsColle
 public class SolrUtils {
   public static final String COMMON = "common";
   public static final String CONF = "conf";
-  public static final String SCHEMA = "managed-schema";
+  public static final String SCHEMA = "managed-schema.xml";
   private static final Logger LOGGER = LoggerFactory.getLogger(SolrUtils.class);
   private static final String DEFAULT_QUERY_PARSER_OPERATOR = "AND";
   private static final Set<String> NON_REPEATABLE_FIELDS = new HashSet<>(Arrays.asList(RodaConstants.AIP_TITLE,
@@ -127,9 +134,20 @@ public class SolrUtils {
   public static <T extends IsIndexed> IndexResult<T> find(SolrClient index, SolrCollection<T> collection, Filter filter,
     Sorter sorter, Sublist sublist, Facets facets, List<String> fieldsToReturn, Map<String, String> extraParameters)
     throws GenericException, RequestNotValidException {
+    return find(index, collection, filter, sorter, sublist, facets, fieldsToReturn, extraParameters, new ArrayList<>());
+  }
+
+  public static <T extends IsIndexed> IndexResult<T> find(SolrClient index, SolrCollection<T> collection, Filter filter,
+    Sorter sorter, Sublist sublist, Facets facets, List<String> fieldsToReturn, Map<String, String> extraParameters,
+    List<Filter> filterQueries) throws GenericException, RequestNotValidException {
     IndexResult<T> ret;
     SolrQuery query = new SolrQuery();
     query.setQuery(parseFilter(filter));
+    List<String> parsedFilterQueries = new ArrayList<>();
+    for (Filter filterQuery : filterQueries) {
+      parsedFilterQueries.add(parseFilter(filterQuery));
+    }
+    query.setFilterQueries(parsedFilterQueries.toArray(new String[0]));
     final List<SolrQuery.SortClause> sortClauses = parseSorter(sorter);
     sortClauses.add(SolrQuery.SortClause.asc(RodaConstants.INDEX_UUID));
     query.setSorts(sortClauses);
@@ -151,6 +169,51 @@ public class SolrUtils {
 
     try {
       QueryResponse response = index.query(collection.getIndexName(), query);
+      ret = queryResponseToIndexResult(response, collection, facets);
+    } catch (SolrException e) {
+      boolean shouldReturnEmptyResult = (e.code() == 404);
+      // there may be other cases where an empty result should be returned
+      if (shouldReturnEmptyResult) {
+        // build an empty IndexedResult
+        final SolrDocumentList docList = new SolrDocumentList();
+        final List<FacetFieldResult> facetResults = processFacetFields(facets, null);
+        final long offset = docList.getStart();
+        final long limit = docList.size();
+        final long totalCount = docList.getNumFound();
+        final List<T> docs = new ArrayList<T>();
+        ret = new IndexResult<T>(offset, limit, totalCount, docs, facetResults);
+      } else {
+        throw buildGenericException(e);
+      }
+    } catch (SolrServerException | IOException e) {
+      throw buildGenericException(e);
+    }
+
+    return ret;
+  }
+
+  public static <T extends IsIndexed> IndexResult<T> findHits(SolrClient index, SolrCollection<T> collection,
+    String alias, Filter filter, Sorter sorter, Sublist sublist, Facets facets)
+    throws GenericException, RequestNotValidException {
+    IndexResult<T> ret;
+    SolrQuery query = new SolrQuery();
+    query.setQuery(parseFilter(filter));
+    final List<SolrQuery.SortClause> sortClauses = parseSorter(sorter);
+    sortClauses.add(SolrQuery.SortClause.asc(RodaConstants.INDEX_UUID));
+    query.setSorts(sortClauses);
+    query.setStart(sublist.getFirstElementIndex());
+    query.setRows(0);
+
+    parseAndConfigureFacets(facets, query);
+
+    try {
+      QueryRequest request = new QueryRequest(query);
+      request.setMethod(SolrRequest.METHOD.POST);
+
+      NamedList<Object> namedList = index.request(request, alias);
+      QueryResponse response = new QueryResponse();
+      response.setResponse(namedList);
+
       ret = queryResponseToIndexResult(response, collection, facets);
     } catch (SolrException e) {
       boolean shouldReturnEmptyResult = (e.code() == 404);
@@ -202,10 +265,22 @@ public class SolrUtils {
   public static <T extends IsIndexed> Pair<IndexResult<T>, String> find(SolrClient index, Class<T> classToRetrieve,
     Filter filter, Sorter sorter, int pageSize, String cursorMark, List<String> fieldsToReturn,
     Map<String, String> extraParameters) throws RequestNotValidException, GenericException {
+    return find(index, classToRetrieve, filter, sorter, pageSize, cursorMark, fieldsToReturn, extraParameters,
+      new ArrayList<>());
+  }
+
+  public static <T extends IsIndexed> Pair<IndexResult<T>, String> find(SolrClient index, Class<T> classToRetrieve,
+    Filter filter, Sorter sorter, int pageSize, String cursorMark, List<String> fieldsToReturn,
+    Map<String, String> extraParameters, List<Filter> filterQueries) throws RequestNotValidException, GenericException {
     Pair<IndexResult<T>, String> ret;
     SolrQuery query = new SolrQuery();
     query.setParam("q.op", DEFAULT_QUERY_PARSER_OPERATOR);
     query.setQuery(parseFilter(filter));
+    List<String> parsedFilterQueries = new ArrayList<>();
+    for (Filter filterQuery : filterQueries) {
+      parsedFilterQueries.add(parseFilter(filterQuery));
+    }
+    query.setFilterQueries(parsedFilterQueries.toArray(new String[0]));
 
     query.set(CursorMarkParams.CURSOR_MARK_PARAM, cursorMark);
     query.setRows(pageSize);
@@ -379,7 +454,7 @@ public class SolrUtils {
 
   private static void parseAndConfigureFacets(Facets facets, SolrQuery query) {
     if (facets != null) {
-      query.setFacetSort(FacetParams.FACET_SORT_INDEX);
+      query.setFacetSort(FacetParams.FACET_SORT_COUNT);
       if (!"".equals(facets.getQuery())) {
         query.addFacetQuery(facets.getQuery());
       }
@@ -405,13 +480,10 @@ public class SolrUtils {
 
   private static void setQueryFacetParameter(SolrQuery query, SimpleFacetParameter facetParameter) {
     query.addFacetField(facetParameter.getName());
-    if (facetParameter.getMinCount() != FacetParameter.DEFAULT_MIN_COUNT) {
-      query.add(String.format("f.%s.facet.mincount", facetParameter.getName()),
-        String.valueOf(facetParameter.getMinCount()));
-    }
-    if (facetParameter.getLimit() != SimpleFacetParameter.DEFAULT_LIMIT) {
-      query.add(String.format("f.%s.facet.limit", facetParameter.getName()), String.valueOf(facetParameter.getLimit()));
-    }
+    query.add(String.format("f.%s.facet.mincount", facetParameter.getName()),
+      String.valueOf(facetParameter.getMinCount()));
+    query.add(String.format("f.%s.facet.limit", facetParameter.getName()), String.valueOf(facetParameter.getLimit()));
+    query.add(String.format("f.%s.facet.offset", facetParameter.getName()), String.valueOf(facetParameter.getOffset()));
   }
 
   public static <T extends IsIndexed> IndexResult<T> queryResponseToIndexResult(QueryResponse response,
@@ -574,6 +646,9 @@ public class SolrUtils {
       EmptyKeyFilterParameter param = (EmptyKeyFilterParameter) parameter;
       appendANDOperator(ret, prefixWithANDOperatorIfBuilderNotEmpty);
       ret.append("(*:* NOT " + param.getName() + ":*)");
+    } else if (parameter instanceof BlockJoinAnyParentExpiryFilterParameter) {
+      BlockJoinAnyParentExpiryFilterParameter param = (BlockJoinAnyParentExpiryFilterParameter) parameter;
+      appendExpiryParameter(ret, param);
     } else if (parameter instanceof DateRangeFilterParameter) {
       DateRangeFilterParameter param = (DateRangeFilterParameter) parameter;
       appendRange(ret, param.getName(), Date.class, param.getFromValue(), String.class,
@@ -637,6 +712,26 @@ public class SolrUtils {
 
       ret.append(")");
     }
+  }
+
+  private static void appendExpiryParameter(StringBuilder ret, BlockJoinAnyParentExpiryFilterParameter param) {
+    ret.append("{!parent which='*:* -_nest_path_:*'}(");
+    if (param.getGroups().isEmpty()) {
+      // impossible query if no groups are provided
+      ret.append("-*:*");
+    } else {
+      for (int i = 0; i < param.getGroups().size(); i++) {
+        if (i > 0) {
+          ret.append(" OR ");
+        }
+        ret.append("(");
+        ret.append("group_value:(" + param.getGroups().get(i) + ")");
+        ret.append(" AND ");
+        appendRange(ret, "expiry_date", Date.class, param.getFromValue(), Date.class, param.getToValue(), false);
+        ret.append(") OR (group_value:(" + param.getGroups().get(i) + ") AND -expiry_date:*)");
+      }
+    }
+    ret.append(")");
   }
 
   private static String processFromDate(Date fromValue) {
@@ -766,13 +861,9 @@ public class SolrUtils {
   }
 
   private static void appendValuesUsingOROperator(StringBuilder ret, String key, List<String> values,
-    boolean prependWithOrIfNeeded) {
+    boolean prefixWithANDOperatorIfBuilderNotEmpty) {
     if (!values.isEmpty()) {
-      if (prependWithOrIfNeeded) {
-        appendOROperator(ret, true);
-      } else {
-        appendANDOperator(ret, true);
-      }
+      appendANDOperator(ret, prefixWithANDOperatorIfBuilderNotEmpty);
 
       ret.append("(");
       for (int i = 0; i < values.size(); i++) {
@@ -788,7 +879,7 @@ public class SolrUtils {
   private static void appendExactMatch(StringBuilder ret, String key, String value, boolean appendDoubleQuotes,
     boolean prefixWithANDOperatorIfBuilderNotEmpty) {
     appendANDOperator(ret, prefixWithANDOperatorIfBuilderNotEmpty);
-    ret.append("(").append(key).append(": ");
+    ret.append("(").append(key).append(":");
     if (appendDoubleQuotes) {
       ret.append("\"");
     }
@@ -1254,5 +1345,49 @@ public class SolrUtils {
       }
     }
     return ret;
+  }
+
+  public static Map<String, AuthorizationDetails> objectToDatabasePermissions(Object object) {
+    Map<String, AuthorizationDetails> ret = new HashMap<>();
+
+    if (object != null) {
+      if (object instanceof SolrDocument doc) {
+        String group = objectToString(doc.get(ViewerConstants.SOLR_DATABASES_PERMISSIONS_GROUP), null);
+        if (group != null) {
+          AuthorizationDetails authorizationDetails = new AuthorizationDetails();
+          authorizationDetails.setExpiry(objectToDate(doc.get(ViewerConstants.SOLR_DATABASES_PERMISSIONS_EXPIRY)));
+          ret.put(group, authorizationDetails);
+        }
+      } else {
+        List<SolrDocument> documents = (List<SolrDocument>) object;
+        documents.forEach(doc -> {
+          String group = objectToString(doc.get(ViewerConstants.SOLR_DATABASES_PERMISSIONS_GROUP), null);
+          if (group != null) {
+            AuthorizationDetails authorizationDetails = new AuthorizationDetails();
+            authorizationDetails.setExpiry(objectToDate(doc.get(ViewerConstants.SOLR_DATABASES_PERMISSIONS_EXPIRY)));
+            ret.put(group, authorizationDetails);
+          }
+        });
+      }
+    }
+
+    return ret;
+  }
+
+  public static String createSearchAllAlias(SolrClient index, String aliasName, List<String> collections)
+    throws SolrServerException, IOException {
+    if (!collections.isEmpty()) {
+      CollectionAdminRequest.CreateAlias request = CollectionAdminRequest.createAlias(aliasName,
+        String.join(",", collections));
+      request.setMethod(SolrRequest.METHOD.POST);
+      index.request(request);
+    }
+    return aliasName;
+  }
+
+  public static void deleteSearchAllAlias(SolrClient index, String aliasName) throws SolrServerException, IOException {
+    CollectionAdminRequest.DeleteAlias request = CollectionAdminRequest.deleteAlias(aliasName);
+    request.setMethod(SolrRequest.METHOD.POST);
+    index.request(request);
   }
 }

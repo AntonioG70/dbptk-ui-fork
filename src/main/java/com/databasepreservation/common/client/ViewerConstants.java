@@ -46,6 +46,8 @@ public class ViewerConstants {
     + ViewerConstants.API_V1_CONFIGURATION_RESOURCE;
   public static final String ENDPOINT_JOB = ViewerConstants.API_SEP + ViewerConstants.API_SERVLET
     + ViewerConstants.API_V1_JOB_RESOURCE;
+  public static final String ENDPOINT_FILE = ViewerConstants.API_SEP + ViewerConstants.API_SERVLET
+    + ViewerConstants.API_V1_FILE_RESOURCE;
 
   /*
    * DBVTK CONFIG
@@ -89,6 +91,7 @@ public class ViewerConstants {
   public static final String DENORMALIZATION_STATUS_PREFIX = "denormalization-";
 
   public static final String INTERNAL_ZIP_LOB_FOLDER = "lobs/";
+  public static final String SIARDDK_DEFAULT_SCHEMA_NAME = "public";
 
   /*
    * SOLR CONFIGSETS
@@ -120,10 +123,16 @@ public class ViewerConstants {
   public static final String INDEX_WILDCARD = "*";
 
   /*
+   * COMMON FIELDS
+   */
+  public static final String SOLR_CONTENT_TYPE = "content_type";
+
+  /*
    * DATABASE FIELDS
    */
   public static final String SOLR_DATABASES_STATUS = "status";
   public static final String SOLR_DATABASES_BROWSE_LOAD_DATE = "browse_loaded_date";
+  public static final String SOLR_DATABASES_AVAILABLE_TO_SEARCH_ALL = "available_to_search_all";
   public static final String SOLR_DATABASES_METADATA = "metadata";
   public static final String SOLR_DATABASES_SIARD_PATH = "siard_path";
   public static final String SOLR_DATABASES_SIARD_SIZE = "siard_size";
@@ -138,6 +147,10 @@ public class ViewerConstants {
   public static final String SOLR_DATABASES_VALIDATION_WARNINGS = "siard_validation_warnings";
   public static final String SOLR_DATABASES_VALIDATION_SKIPPED = "siard_validation_skipped";
   public static final String SOLR_DATABASES_PERMISSIONS = "database_permissions";
+  public static final String SOLR_DATABASES_PERMISSIONS_GROUP = "group_value";
+  public static final String SOLR_DATABASES_PERMISSIONS_EXPIRY = "expiry_date";
+  public static final String SOLR_DATABASES_CONTENT_TYPE_ROOT = "database";
+  public static final String SOLR_DATABASES_CONTENT_TYPE_PERMISSION = "permission";
 
   /*
    * ACTIVITY LOG FIELDS
@@ -175,6 +188,9 @@ public class ViewerConstants {
 
   public static final String ACTIVITY_LOG_PROPERTY = "activityLogEntry";
 
+  public static final String UI_LISTS_PROPERTY = "ui.lists";
+  public static final String UI_LISTS_SEARCH_SELECTEDINFO_LABEL_DEFAULT_I18N_PROPERTY = "search.selectedInfo.label.default.i18n";
+
   public static final String LISTS_PROPERTY = "lists";
 
   public static final String LISTS_FACETS_QUERY_PROPERTY = "facets.query";
@@ -208,13 +224,14 @@ public class ViewerConstants {
   /*
    * ROW FIELDS
    */
+  public static final String SOLR_ROWS_DATABASE_UUID = "databaseUUID";
   public static final String SOLR_ROWS_TABLE_ID = "tableId";
   public static final String SOLR_ROWS_TABLE_UUID = "tableUUID";
   public static final String SOLR_ROWS_NESTED_UUID = "nestedUUID";
   public static final String SOLR_ROWS_NESTED_ORIGINAL_UUID = "nestedOriginalUUID";
   public static final String SOLR_ROWS_NESTED_TABLE_ID = "nestedTableId";
   public static final String SOLR_ROWS_NESTED = "nested";
-
+  public static final String SOLR_ROWS_NESTED_COL = "nst_";
   /*
    * DYNAMIC FIELD TYPES (suffixes)
    */
@@ -228,8 +245,9 @@ public class ViewerConstants {
   public static final String SOLR_DYN_LOCATION_RPT = "_srpt";
   public static final String SOLR_DYN_LONG = "_l";
   public static final String SOLR_DYN_STRING = "_s";
-  public static final String SOLR_DYN_TEXT_GENERAL = "_t";
-  public static final String SOLR_DYN_TEXT_MULTI = "_txt";
+  public static final String SOLR_DYN_STRING_MULTI = "_ss";
+  public static final String SOLR_DYN_TEXT_GENERAL = "_t_sort";
+  public static final String SOLR_DYN_TEXT_MULTI = "_txt_sort";
   public static final String SOLR_DYN_NEST_MULTI = "_nst";
   public static final String SOLR_DYN_MIMETYPE = "_mimetype";
   public static final String SOLR_DYN_FILE_EXTENSION = "_fileExtension";
@@ -434,7 +452,9 @@ public class ViewerConstants {
   public static final String SIARD_V10 = "1.0";
   public static final String SIARD_V20 = "2.0";
   public static final String SIARD_V21 = "2.1";
-
+  public static final String SIARD_DK = "dk";
+  public static final String SIARD_DK_1007 = "dk-1007";
+  public static final String SIARD_DK_128 = "dk-128";
   /*
    * DBPTK Metadata
    */
@@ -513,18 +533,31 @@ public class ViewerConstants {
   /**
    * Template Engine
    */
+
   public static final String OPEN_TEMPLATE_ENGINE = "{{";
   public static final String CLOSE_TEMPLATE_ENGINE = "}}";
+  public static final String TEMPLATE_IIIF_VIEWER_LINK = "iiif_viewer_link";
   public static final String TEMPLATE_LOB_DOWNLOAD_LABEL = "download_label";
   public static final String TEMPLATE_LOB_DOWNLOAD_LINK = "download_link";
   public static final String TEMPLATE_LOB_ROW_INDEX = "row_index";
   public static final String TEMPLATE_LOB_COLUMN_INDEX = "column_index";
   public static final String TEMPLATE_LOB_AUTO_DETECTED_MIME_TYPE = "auto_detected_mime_type";
   public static final String TEMPLATE_LOB_AUTO_DETECTED_EXTENSION = "auto_detected_extension";
+  public static final String DEFAULT_VIEWER_DOWNLOAD_LABEL_TEMPLATE = "<a href=\""
+    + ViewerConstants.OPEN_TEMPLATE_ENGINE
+    + ViewerConstants.TEMPLATE_IIIF_VIEWER_LINK + ViewerConstants.CLOSE_TEMPLATE_ENGINE + ViewerConstants.OPEN_TEMPLATE_ENGINE
+    + ViewerConstants.TEMPLATE_LOB_DOWNLOAD_LINK + ViewerConstants.CLOSE_TEMPLATE_ENGINE + "\">"
+    + ViewerConstants.OPEN_TEMPLATE_ENGINE + ViewerConstants.TEMPLATE_LOB_DOWNLOAD_LABEL
+    + ViewerConstants.CLOSE_TEMPLATE_ENGINE + "</a>";
   public static final String DEFAULT_DOWNLOAD_LABEL_TEMPLATE = "<a href=\"" + ViewerConstants.OPEN_TEMPLATE_ENGINE
     + ViewerConstants.TEMPLATE_LOB_DOWNLOAD_LINK + ViewerConstants.CLOSE_TEMPLATE_ENGINE + "\">"
     + ViewerConstants.OPEN_TEMPLATE_ENGINE + ViewerConstants.TEMPLATE_LOB_DOWNLOAD_LABEL
     + ViewerConstants.CLOSE_TEMPLATE_ENGINE + "</a>";
+  public static final String DEFAULT_DETAILED_VIEWER_LABEL_TEMPLATE = "<iframe class=\"embedded-iiif-viewer\" src=\""
+    + ViewerConstants.OPEN_TEMPLATE_ENGINE + ViewerConstants.TEMPLATE_IIIF_VIEWER_LINK + ViewerConstants.CLOSE_TEMPLATE_ENGINE
+    + ViewerConstants.OPEN_TEMPLATE_ENGINE + ViewerConstants.TEMPLATE_LOB_DOWNLOAD_LINK
+    + ViewerConstants.CLOSE_TEMPLATE_ENGINE + "\">" + ViewerConstants.OPEN_TEMPLATE_ENGINE
+    + ViewerConstants.TEMPLATE_LOB_DOWNLOAD_LABEL + ViewerConstants.CLOSE_TEMPLATE_ENGINE + "</iframe>";
 
   /**
    * SIARD prefixes
@@ -545,15 +578,50 @@ public class ViewerConstants {
   public static final String PROPERTY_DISABLE_AUTO_DETECT_MIME_TYPE = "ui.disable.autoDetect.mimeType";
   public static final String PROPERTY_PLUGIN_LOAD_ON_ACCESS = "ui.plugin.loadOnAccess";
 
+  public static final String ALIAS_PREFIX = "alias-";
+  public static final String TEMP_PREFIX = "temp-";
+
+  public static final String EMPTY_SEARCH = "";
+
+  /**
+   * Search all
+   */
+  public static final String LOCAL_STORAGE_SEARCH_ALL_SELECTION = "searchAllSelection";
+  public static final String SEARCH_ALL_SELECTED_ALL = "all";
+  public static final String SEARCH_ALL_SELECTED_NONE = "none";
+  public static final String PROPERTY_SEARCH_ALL_DEFAULT_SELECTION = "ui.searchAll.defaultSelection";
+
+  /**
+   * Permissions
+   */
+  public static final String PROPERTY_EXPIRY_ZONE_ID_OVERRIDE = "permissions.expiry.zoneId.override";
+
   /**
    * Header
    */
   public static final String DEFAULT_PROPERTY_UI_HEADER_TITLE = "<img src=\"api/v1/theme?resource_id=dbptk_logo_white_vector.svg\" class=\"header-logo\"><span class=\"header-text\">DBPTK Enterprise</span>";
   public static final String PROPERTY_UI_HEADER_TITLE = "ui.header.title";
 
+  /*
+   * Show schema name in reference table
+   */
+  public static final String PROPERTY_REFERENCE_TABLE_SHOW_SCHEMA_NAME = "ui.reference.table.show.schema.name";
+
+  public enum SiardVersion {
+    V1_0, V2_0, V2_1, DK, DK_1007, DK_128;
+  }
+
   /**
    * private constructor
    */
   private ViewerConstants() {
   }
+
+  /**
+   * External viewer information
+   */
+
+  public static final String IIIF_EXTERNAL_VIEWER_SERVICE_NAME = "ui.iiif_viewer.service_name";
+  public static final String PRESENTATION_EXTERNAL_SERVICE_NAME = "ui.iiif_viewer.presentation.service_name";
+  public static final String VIEWER_ENABLED = "ui.iiif_viewer.enabled";
 }

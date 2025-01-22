@@ -7,7 +7,12 @@
  */
 package com.databasepreservation.common.client.models.structure;
 
-import java.util.*;
+import java.io.Serial;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 import com.databasepreservation.common.client.ViewerConstants;
 import com.databasepreservation.common.client.index.IsIndexed;
@@ -16,7 +21,10 @@ import com.databasepreservation.common.client.index.IsIndexed;
  * @author Bruno Ferreira <bferreira@keep.pt>
  */
 public class ViewerRow extends IsIndexed {
+  @Serial
+  private static final long serialVersionUID = 5337660979887460340L;
   private String UUID;
+  private String databaseUUID;
   private String tableUUID;
   private String tableId;
   private Map<String, ViewerCell> cells;
@@ -27,6 +35,22 @@ public class ViewerRow extends IsIndexed {
   private Map<String, ViewerMimeType> colsMimeTypeList;
 
   private Map<String, ViewerLobStoreType> colsLobTypeList;
+
+  @Override
+  public String toString() {
+    return "ViewerRow{" +
+      "UUID='" + UUID + '\'' +
+      ", tableUUID='" + tableUUID + '\'' +
+      ", tableId='" + tableId + '\'' +
+      ", cells=" + cells +
+      ", nestedRowList=" + nestedRowList +
+      ", nestedUUID='" + nestedUUID + '\'' +
+      ", nestedTableId='" + nestedTableId + '\'' +
+      ", nestedOriginalUUID='" + nestedOriginalUUID + '\'' +
+      ", colsMimeTypeList=" + colsMimeTypeList +
+      ", colsLobTypeList=" + colsLobTypeList +
+      '}';
+  }
 
   public ViewerRow() {
     cells = new LinkedHashMap<>();
@@ -42,6 +66,14 @@ public class ViewerRow extends IsIndexed {
 
   public void setUuid(String UUID) {
     this.UUID = UUID;
+  }
+
+  public String getDatabaseUUID() {
+    return databaseUUID;
+  }
+
+  public void setDatabaseUUID(String databaseUUID) {
+    this.databaseUUID = databaseUUID;
   }
 
   /**

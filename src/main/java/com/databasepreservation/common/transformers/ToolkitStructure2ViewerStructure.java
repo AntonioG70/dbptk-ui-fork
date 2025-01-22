@@ -8,6 +8,7 @@
 package com.databasepreservation.common.transformers;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -41,6 +43,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.SAXException;
 
+import com.databasepreservation.common.api.utils.ExtraMediaType;
 import com.databasepreservation.common.client.ViewerConstants;
 import com.databasepreservation.common.client.models.status.collection.CollectionStatus;
 import com.databasepreservation.common.client.models.status.collection.TableStatus;
@@ -65,7 +68,6 @@ import com.databasepreservation.common.client.models.structure.ViewerSchema;
 import com.databasepreservation.common.client.models.structure.ViewerTable;
 import com.databasepreservation.common.client.models.structure.ViewerTrigger;
 import com.databasepreservation.common.client.models.structure.ViewerType;
-import com.databasepreservation.common.client.models.structure.ViewerTypeArray;
 import com.databasepreservation.common.client.models.structure.ViewerTypeStructure;
 import com.databasepreservation.common.client.models.structure.ViewerUserStructure;
 import com.databasepreservation.common.client.models.structure.ViewerView;
@@ -77,6 +79,7 @@ import com.databasepreservation.common.server.ViewerFactory;
 import com.databasepreservation.common.server.index.utils.SolrUtils;
 import com.databasepreservation.common.utils.LobManagerUtils;
 import com.databasepreservation.common.utils.ViewerUtils;
+import com.databasepreservation.model.data.ArrayCell;
 import com.databasepreservation.model.data.BinaryCell;
 import com.databasepreservation.model.data.Cell;
 import com.databasepreservation.model.data.ComposedCell;
@@ -366,7 +369,10 @@ public class ToolkitStructure2ViewerStructure {
     ArrayList<ViewerView> result = new ArrayList<>();
     if (views != null) {
       for (ViewStructure view : views) {
-        result.add(getView(vdb, view));
+        if (view.getColumns() != null) {
+          ViewerView viewerView = getView(vdb, view);
+          result.add(viewerView);
+        }
       }
     }
     return result;
@@ -377,7 +383,7 @@ public class ToolkitStructure2ViewerStructure {
     result.setName(view.getName());
     result.setUuid(SolrUtils.randomUUID());
     try {
-      result.setColumns(getColumns(view.getColumns()));
+      result.setColumns(getColumns(view.getColumns(), null, new ArrayList<>()));
     } catch (ViewerException e) {
       LOGGER.error("Could not convert the columns for view {}", view, e);
       result.setColumns(new ArrayList<>());
@@ -461,7 +467,7 @@ public class ToolkitStructure2ViewerStructure {
     result.setCountRows(table.getRows());
     result.setSchemaName(table.getSchema());
     result.setSchemaUUID(vdb.getSchema(result.getSchemaName()).getUuid());
-    result.setColumns(getColumns(table.getColumns()));
+    result.setColumns(getColumns(table.getColumns(), table.getPrimaryKey(), table.getForeignKeys()));
     if (!simpleMetadata) {
       result.setTriggers(getTriggers(table.getTriggers()));
       result.setPrimaryKey(getPrimaryKey(table, references));
@@ -606,23 +612,30 @@ public class ToolkitStructure2ViewerStructure {
     return result;
   }
 
-  private static List<ViewerColumn> getColumns(List<ColumnStructure> columns) throws ViewerException {
+  private static List<ViewerColumn> getColumns(List<ColumnStructure> columns, PrimaryKey primaryKey,
+    List<ForeignKey> foreignKeys) throws ViewerException {
     List<ViewerColumn> result = new ArrayList<>();
     int index = 0;
     for (ColumnStructure column : columns) {
-      result.add(getColumn(column, index++));
+      result.add(getColumn(column, index++, primaryKey, foreignKeys));
     }
     return result;
   }
 
-  private static ViewerColumn getColumn(ColumnStructure column, int index) throws ViewerException {
+  private static ViewerColumn getColumn(ColumnStructure column, int index, PrimaryKey primaryKey,
+    List<ForeignKey> foreignKeys) throws ViewerException {
     ViewerColumn result = new ViewerColumn();
     Type columnType = column.getType();
+
+    boolean isPrimaryKey = primaryKey != null && primaryKey.getColumnNames().contains(column.getName());
+    boolean isForeignKey = !foreignKeys.isEmpty() && foreignKeys.stream().map(
+      m -> m.getReferences().stream().map(Reference::getColumn).collect(Collectors.toSet()).contains(column.getName()))
+      .findFirst().orElse(false);
 
     ViewerType columnViewerType = getType(columnType);
     result.setType(columnViewerType);
     if (!simpleMetadata) {
-      result.setSolrName(getColumnSolrName(index, columnType, columnViewerType));
+      result.setSolrName(getColumnSolrName(index, columnType, columnViewerType, isPrimaryKey, isForeignKey));
       result.setColumnIndexInEnclosingTable(index);
     }
     result.setDisplayName(column.getName());
@@ -644,7 +657,8 @@ public class ToolkitStructure2ViewerStructure {
    * @return the column name
    * @throws ViewerException
    */
-  private static String getColumnSolrName(int index, Type type, ViewerType viewerType) throws ViewerException {
+  private static String getColumnSolrName(int index, Type type, ViewerType viewerType, boolean isPrimaryKey,
+    boolean isForeignKey) throws ViewerException {
     // suffix must always be set before being used
     String suffix;
     String prefix = ViewerConstants.SOLR_INDEX_ROW_COLUMN_NAME_PREFIX;
@@ -682,14 +696,14 @@ public class ToolkitStructure2ViewerStructure {
     } else if (type instanceof SimpleTypeString) {
       suffix = ViewerConstants.SOLR_DYN_TEXT_GENERAL;
     } else if (type instanceof ComposedTypeArray) {
-      throw new ViewerException("Arrays are not yet supported.");
+      suffix = ViewerConstants.SOLR_DYN_STRING_MULTI;
     } else if (type instanceof ComposedTypeStructure) {
       throw new ViewerException("Composed types are not yet supported.");
     } else {
       throw new ViewerException("Unknown type: " + type.toString());
     }
 
-    return prefix + index + suffix;
+    return prefix + index + (isPrimaryKey || isForeignKey ? ViewerConstants.SOLR_DYN_STRING : suffix);
   }
 
   private static ViewerType getType(Type type) throws ViewerException {
@@ -730,10 +744,11 @@ public class ToolkitStructure2ViewerStructure {
           result.setDbType(ViewerType.dbTypes.STRING);
         }
       } else if (type instanceof ComposedTypeArray) {
-        result = new ViewerTypeArray();
+        // result = new ViewerTypeArray();
         result.setDbType(ViewerType.dbTypes.COMPOSED_ARRAY);
         // set type of elements in the array
-        ((ViewerTypeArray) result).setElementType(getType(((ComposedTypeArray) type).getElementType()));
+        // ((ViewerTypeArray) result).setElementType(getType(((ComposedTypeArray)
+        // type).getElementType()));
       } else if (type instanceof ComposedTypeStructure) {
         result = new ViewerTypeStructure();
         result.setDbType(ViewerType.dbTypes.COMPOSED_STRUCTURE);
@@ -750,16 +765,17 @@ public class ToolkitStructure2ViewerStructure {
   }
 
   public static ViewerRow getRow(CollectionStatus collectionConfiguration, ViewerTable table, Row row, long rowIndex,
-    String databasePath) {
+    String databasePath, String siardVersion) {
     setCurrentTable(table);
 
     ViewerRow result = new ViewerRow();
     // String rowUUID = SolrUtils.UUIDFromString(table.getUuid() + "." + rowIndex);
     String rowUUID = String.valueOf(rowIndex);
+    result.setDatabaseUUID(collectionConfiguration.getDatabaseUUID());
     result.setTableId(table.getId());
     result.setTableUUID(table.getUuid());
     result.setUuid(rowUUID);
-    result.setCells(getCells(collectionConfiguration, table, row, databasePath, result));
+    result.setCells(getCells(collectionConfiguration, table, row, databasePath, result, siardVersion));
     return result;
   }
 
@@ -770,7 +786,7 @@ public class ToolkitStructure2ViewerStructure {
   }
 
   private static Map<String, ViewerCell> getCells(CollectionStatus collectionConfiguration, ViewerTable table, Row row,
-    String databasePath, ViewerRow actualViewerRow) {
+    String databasePath, ViewerRow actualViewerRow, String siardVersion) {
     Map<String, ViewerCell> result = new LinkedHashMap<>();
 
     int colIndex = 0;
@@ -779,7 +795,7 @@ public class ToolkitStructure2ViewerStructure {
       String solrColumnName = viewerColumn.getSolrName();
       try {
         result.put(solrColumnName, getCell(collectionConfiguration, table, toolkitCells.get(colIndex), colIndex++,
-          databasePath, actualViewerRow));
+          databasePath, actualViewerRow, siardVersion));
       } catch (ViewerException e) {
         LOGGER.error("Problem converting cell, omitted it (as if it were NULL)", e);
       }
@@ -789,7 +805,7 @@ public class ToolkitStructure2ViewerStructure {
   }
 
   private static ViewerCell getCell(CollectionStatus collectionConfiguration, ViewerTable table, Cell cell,
-    int colIndex, String databasePath, ViewerRow actualViewerRow) throws ViewerException {
+    int colIndex, String databasePath, ViewerRow actualViewerRow, String siardVersion) throws ViewerException {
     ViewerCell result = new ViewerCell();
 
     ViewerType columnType = table.getColumns().get(colIndex).getType();
@@ -847,17 +863,27 @@ public class ToolkitStructure2ViewerStructure {
 
       } else {
         // BLOB is internal to the SIARD but is stored outside the table.xml (Normal)
+        String lobName;
 
-        String lobName = Paths.get(binaryCell.getFile()).getFileName().toString();
-        result.setValue(lobName);
         collectionConfiguration.getTableStatusByTableId(table.getId()).getColumnByIndex(colIndex).setExternalLob(false);
         actualViewerRow.addLobType(
           collectionConfiguration.getTableStatusByTableId(table.getId()).getColumnByIndex(colIndex).getId(),
           ViewerLobStoreType.INTERNALLY);
 
-        if (!mimeTypeAutoDetectDisable) {
-          detectMimeType(actualViewerRow, result, databasePath, collectionConfiguration, table, colIndex, lobName,
-            true);
+        if (siardVersion.equals(ViewerConstants.SIARD_DK_128) || siardVersion.equals(ViewerConstants.SIARD_DK_1007)) {
+          lobName = binaryCell.getFile();
+          result.setValue(lobName);
+          if (!mimeTypeAutoDetectDisable) {
+            detectMimeType(actualViewerRow, result, databasePath, collectionConfiguration, table, colIndex, lobName,
+              true, true);
+          }
+        } else {
+          lobName = Paths.get(binaryCell.getFile()).getFileName().toString();
+          result.setValue(lobName);
+          if (!mimeTypeAutoDetectDisable) {
+            detectMimeType(actualViewerRow, result, databasePath, collectionConfiguration, table, colIndex, lobName,
+              true);
+          }
         }
       }
     } else if (cell instanceof ComposedCell) {
@@ -881,6 +907,13 @@ public class ToolkitStructure2ViewerStructure {
         default:
           result.setValue(removeUnicode(simpleCell.getSimpleData()));
       }
+    } else if (cell instanceof ArrayCell) {
+      ArrayCell arrayCell = (ArrayCell) cell;
+      List<String> valuesList = new ArrayList<>();
+      arrayCell.forEach(arrayElement -> {
+        valuesList.add(((SimpleCell) arrayElement.getValue()).getSimpleData());
+      });
+      result.setListValue(valuesList);
     } else if (!(cell instanceof NullCell)) {
       // nothing to do for null cells
       throw new ViewerException("Unexpected cell type");
@@ -892,69 +925,93 @@ public class ToolkitStructure2ViewerStructure {
   private static void detectMimeType(ViewerRow row, ViewerCell cell, String databasePath,
     CollectionStatus collectionConfiguration, ViewerTable table, int colIndex, String lobName,
     boolean blobIsInsideSiard) {
+    detectMimeType(row, cell, databasePath, collectionConfiguration, table, colIndex, lobName, blobIsInsideSiard,
+      false);
+  }
+
+  private static void detectMimeType(ViewerRow row, ViewerCell cell, String databasePath,
+    CollectionStatus collectionConfiguration, ViewerTable table, int colIndex, String lobName,
+    boolean blobIsInsideSiard, boolean isSiardDK) {
     try {
       String mimeType;
       String fileExtension;
       InputStream inputStream;
 
       TableStatus tableStatus = collectionConfiguration.getTableStatusByTableId(table.getId());
-      String siardLobPath = LobManagerUtils.getZipFilePath(tableStatus, colIndex, lobName);
 
-      ZipFile zipFile = new ZipFile(databasePath);
-      ZipEntry entry = zipFile.getEntry(siardLobPath);
+      ZipFile zipFile = null;
+      ZipEntry entry = null;
+      String siardLobPath;
 
-      String lobCellValue = cell.getValue();
-
-      if (entry != null && blobIsInsideSiard) {
-        inputStream = zipFile.getInputStream(entry);
-      } else if (blobIsInsideSiard) {
-        lobCellValue = lobCellValue.replace(ViewerConstants.SIARD_EMBEDDED_LOB_PREFIX, "");
-        inputStream = new ByteArrayInputStream(Base64.decodeBase64(lobCellValue.getBytes()));
+      File lobFile = new File(lobName);
+      if (lobFile.isDirectory()) {
+        mimeType = ExtraMediaType.APPLICATION_ZIP;
+        fileExtension = ExtraMediaType.ZIP_FILE_EXTENSION;
       } else {
-        lobCellValue = cell.getValue();
-        final Path lobPath = Paths.get(lobCellValue);
-        final Path completeLobPath = ViewerFactory.getViewerConfiguration().getSIARDFilesPath().resolve(lobPath);
-        inputStream = Files.newInputStream(completeLobPath);
-      }
+        String lobCellValue = cell.getValue();
 
-      mimeType = tika.detect(inputStream);
-      fileExtension = MimeTypes.getDefaultMimeTypes().forName(mimeType).getExtension();
+        if (!isSiardDK) {
+          siardLobPath = LobManagerUtils.getZipFilePath(tableStatus, colIndex, lobName);
+          zipFile = new ZipFile(databasePath);
+          entry = zipFile.getEntry(siardLobPath);
 
-      if (StringUtils.isAllBlank(fileExtension)) {
-        try {
-          if (blobIsInsideSiard) {
-            if (entry != null) {
-              inputStream = zipFile.getInputStream(entry);
-            } else {
-              inputStream = new ByteArrayInputStream(lobCellValue.getBytes());
-            }
+          if (entry != null && blobIsInsideSiard) {
+            inputStream = zipFile.getInputStream(entry);
+          } else if (blobIsInsideSiard) {
+            lobCellValue = lobCellValue.replace(ViewerConstants.SIARD_EMBEDDED_LOB_PREFIX, "");
+            inputStream = new ByteArrayInputStream(Base64.decodeBase64(lobCellValue.getBytes()));
           } else {
+            lobCellValue = cell.getValue();
             final Path lobPath = Paths.get(lobCellValue);
             final Path completeLobPath = ViewerFactory.getViewerConfiguration().getSIARDFilesPath().resolve(lobPath);
             inputStream = Files.newInputStream(completeLobPath);
           }
+        } else {
+          inputStream = Files.newInputStream(Paths.get(lobName));
+        }
 
-          AutoDetectParser parser = new AutoDetectParser();
-          Metadata metadata = new Metadata();
+        mimeType = tika.detect(inputStream);
+        fileExtension = MimeTypes.getDefaultMimeTypes().forName(mimeType).getExtension();
 
-          Boolean autoDetectParserNoLimit = ViewerFactory.getEnvBoolean("AUTO_DETECT_PARSER_NO_LIMIT", false);
+        if (StringUtils.isAllBlank(fileExtension)) {
+          try {
+            if (blobIsInsideSiard) {
+              if (entry != null) {
+                inputStream = zipFile.getInputStream(entry);
+              } else {
+                inputStream = new ByteArrayInputStream(lobCellValue.getBytes());
+              }
+            } else {
+              final Path lobPath = Paths.get(lobCellValue);
+              final Path completeLobPath = ViewerFactory.getViewerConfiguration().getSIARDFilesPath().resolve(lobPath);
+              inputStream = Files.newInputStream(completeLobPath);
+            }
 
-          if (autoDetectParserNoLimit) {
-            parser.parse(inputStream, new BodyContentHandler(-1), metadata, new ParseContext());
-          } else {
-            parser.parse(inputStream, new BodyContentHandler(), metadata, new ParseContext());
+            AutoDetectParser parser = new AutoDetectParser();
+            Metadata metadata = new Metadata();
+
+            Boolean autoDetectParserNoLimit = ViewerFactory.getEnvBoolean("AUTO_DETECT_PARSER_NO_LIMIT", false);
+
+            if (autoDetectParserNoLimit) {
+              parser.parse(inputStream, new BodyContentHandler(-1), metadata, new ParseContext());
+            } else {
+              parser.parse(inputStream, new BodyContentHandler(), metadata, new ParseContext());
+            }
+
+            mimeType = metadata.get("Content-Type");
+            fileExtension = MimeTypes.getDefaultMimeTypes().forName(mimeType).getExtension();
+
+          } catch (SAXException | TikaException e) {
+            LOGGER.error("Could not calculate mimeType for special extensions in the cell: [{}]", cell.getValue(), e);
           }
+        }
 
-          mimeType = metadata.get("Content-Type");
-          fileExtension = MimeTypes.getDefaultMimeTypes().forName(mimeType).getExtension();
+        inputStream.close();
 
-        } catch (SAXException | TikaException e) {
-          LOGGER.error("Could not calculate mimeType for special extensions in the cell: [{}]", cell.getValue(), e);
+        if (zipFile != null) {
+          zipFile.close();
         }
       }
-
-      inputStream.close();
-      zipFile.close();
 
       cell.setMimeType(mimeType);
       cell.setFileExtension(fileExtension);
